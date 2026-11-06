@@ -1,0 +1,49 @@
+# Runtime data, credentials and local deployments
+.data/
+/data/
+/admin-tls/
+/backups/
+/docker-compose.override.yml
+/compose.override.yml
+.env
+.env.*
+!.env.example
+!.env.sample
+*.key
+*.pem
+*.p12
+*.pfx
+*.keystore
+master.key
+dev-account.json
+legacy-export*.json
+gateway.db*
+*.sqlite
+*.sqlite3
+
+# Dependencies and generated artifacts
+node_modules/
+/bin/
+/coverage/
+coverage.out
+*.test
+web/dist/*
+!web/dist/.keep
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local logs, temporary files and editor settings
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+.DS_Store
+.idea/
+.vscode/
+
+# Local agent and cloud configuration
+.agents/
+.codex/
+.aws/

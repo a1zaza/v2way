@@ -1,0 +1,14 @@
+name: v2way
+services:
+  v2way:
+    image: ghcr.io/a1zaza/v2way:latest
+    hostname: v2way
+    container_name: v2way
+    network_mode: host
+    volumes:
+      - ./data:/var/lib/v2way
+    environment:
+      - TZ=Asia/Shanghai
+      - V2WAY_ADMIN_ADDRESS=${V2WAY_ADMIN_ADDRESS:-127.0.0.1:4033}
+    stop_grace_period: 75s
+    restart: unless-stopped

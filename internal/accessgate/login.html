@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <title>访问授权 · v2way</title>
+    <style>
+      @font-face {
+        font-family: Consolas;
+        src: url("{{.Path}}/fonts/consolas.woff") format("woff");
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "LXGW WenKai";
+        src: url("{{.Path}}/fonts/lxgwzk.woff2") format("woff2");
+        font-display: swap;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        min-height: 100dvh;
+        padding: 24px;
+        display: grid;
+        place-items: center;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        font:
+          14px/1.8 Consolas,
+          "LXGW WenKai",
+          monospace;
+      }
+      main {
+        width: 100%;
+        max-width: 460px;
+        padding: 32px;
+        background: #252526;
+        border: 1px solid #38383c;
+        border-radius: 12px;
+      }
+      header {
+        color: #85858d;
+        font-size: 12px;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 18px 0 10px;
+      }
+      p {
+        color: #a1a1aa;
+        margin: 12px 0;
+        overflow-wrap: anywhere;
+      }
+      label {
+        display: block;
+        margin-top: 18px;
+      }
+      input,
+      button {
+        font: inherit;
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid #48484e;
+        border-radius: 6px;
+      }
+      input {
+        display: block;
+        margin-top: 6px;
+        padding: 8px 10px;
+        background: #1e1e1e;
+        color: #e4e4e7;
+      }
+      button {
+        margin-top: 22px;
+        padding: 8px 14px;
+        background: #2563eb;
+        border-color: #3b82f6;
+        color: white;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #303034;
+        border-color: #48484e;
+      }
+      input:focus-visible,
+      button:focus-visible {
+        outline: 2px solid #60a5fa;
+        outline-offset: 3px;
+      }
+      .success {
+        border-left: 2px solid #4ade80;
+        padding-left: 14px;
+      }
+      .error {
+        color: #fca5a5;
+        border: 1px solid #7f3434;
+        background: #482828;
+        padding: 10px;
+        border-radius: 6px;
+      }
+      small {
+        display: block;
+        color: #85858d;
+        overflow-wrap: anywhere;
+      }
+      @media (max-width: 480px) {
+        main {
+          padding: 24px;
+        }
+        input,
+        button {
+          min-height: 44px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>v2way</header>
+      <h1>访问授权</h1>
+      <p>{{.SiteName}} · 仅授权当前站点</p>
+      <p>当前 IP：{{.IP}}</p>
+      {{if .Authorized}}
+      <div class="success">
+        <strong>当前 IP 已授权</strong>
+        <p>预计到期：{{.Expires}}</p>
+      </div>
+      {{end}}
+      <p>
+        正常访问受保护站点后自动续期 48 小时，连续 48 小时无正常访问需重新登录。
+      </p>
+      {{if .Error}}
+      <div class="error" role="alert">{{.Error}}</div>
+      {{end}} {{if .CanRevoke}}
+      <form action="{{.Path}}/logout?_v2way_access=logout" method="post">
+        <input type="hidden" name="csrf" value="{{.CSRF}}" />
+        <p>撤销后，同一出口 IP 下的设备也会失去本站授权，其他站点不受影响。</p>
+        <button class="secondary" type="submit">撤销当前 IP 授权</button>
+      </form>
+      {{else}} {{if .Authorized}}
+      <p>重新验证访问码可续期并获得撤销权限。</p>
+      {{end}}
+      <form action="{{.Path}}/login?_v2way_access=login" method="post">
+        <input type="hidden" name="csrf" value="{{.CSRF}}" />
+        <label for="access-code">访问码（8 位数字）</label>
+        <input
+          id="access-code"
+          name="code"
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]{8}"
+          minlength="8"
+          maxlength="8"
+          required
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          placeholder="请输入 8 位数字访问码"
+        />
+        <button type="submit">登录并授权当前 IP</button>
+      </form>
+      {{end}}
+      <p>
+        <small
+          >授权仅对当前 IP 与当前站点生效，网络变化后可能需要重新登录。</small
+        >
+      </p>
+    </main>
+  </body>
+</html>

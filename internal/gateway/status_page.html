@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>{{.Title}} · v2way</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        min-height: 100dvh;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        font:
+          14px/1.8 Consolas,
+          "LXGW WenKai",
+          monospace;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+      main {
+        width: 100%;
+        max-width: 560px;
+        padding: 36px;
+        border: 1px solid #38383c;
+        border-radius: 12px;
+        background: #252526;
+      }
+      .brand {
+        color: #85858d;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+      }
+      .code {
+        font-size: 64px;
+        font-weight: 600;
+        line-height: 1.2;
+        color: #60a5fa;
+        margin: 24px 0 12px;
+      }
+      h1 {
+        font-size: 22px;
+        line-height: 1.5;
+        margin: 0 0 12px;
+      }
+      p {
+        color: #a1a1aa;
+        margin: 0 0 24px;
+        overflow-wrap: anywhere;
+      }
+      a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 6px 16px;
+        border: 1px solid #48484e;
+        border-radius: 6px;
+        background: #303034;
+        color: #e4e4e7;
+        text-decoration: none;
+      }
+      a:hover {
+        background: #3b3b40;
+      }
+      a:focus-visible {
+        outline: 2px solid #60a5fa;
+        outline-offset: 4px;
+      }
+      footer {
+        border-top: 1px solid #38383c;
+        margin-top: 28px;
+        padding-top: 16px;
+        color: #85858d;
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      @media (max-width: 480px) {
+        main {
+          padding: 24px;
+        }
+        .code {
+          font-size: 52px;
+        }
+        h1 {
+          font-size: 20px;
+        }
+        a {
+          min-height: 44px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">v2way</div>
+      <div class="code" aria-hidden="true">{{.Code}}</div>
+      <h1>{{.Title}}</h1>
+      <p>{{.Description}}</p>
+      {{if .Maintenance}}<a href="">重新加载</a>{{else}}<a href="/">返回首页</a
+      >{{end}}
+      <footer>请求标识：{{.RequestID}}</footer>
+    </main>
+  </body>
+</html>

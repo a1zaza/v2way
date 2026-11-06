@@ -1,0 +1,25 @@
+{
+  "sites": [
+    {
+      "id": "example-site",
+      "name": "示例站点",
+      "domains": ["app.example.com"],
+      "enabled": true,
+      "httpPort": 8080,
+      "https": false,
+      "redirectHttps": false,
+      "maxBodyMiB": 20,
+      "ratePerSecond": 0,
+      "allowCidrs": [],
+      "denyCidrs": [],
+      "routes": [
+        {"id":"example-health","name":"入口健康响应","path":"/health","match":"exact","methods":["GET","HEAD"],"action":"response","stripPrefix":false,"preserveHost":true,"spa":false,"status":200,"body":"网关已就绪","timeoutSeconds":60,"streaming":false},
+        {"id":"example-api","name":"接口代理","path":"/api","match":"prefix","methods":[],"action":"proxy","upstreamId":"example-upstream","stripPrefix":false,"preserveHost":true,"spa":false,"status":200,"timeoutSeconds":60,"streaming":false},
+        {"id":"example-home","name":"入口说明","path":"/","match":"exact","methods":["GET","HEAD"],"action":"response","stripPrefix":false,"preserveHost":true,"spa":false,"status":200,"body":"欢迎使用 v2way","timeoutSeconds":60,"streaming":false}
+      ]
+    }
+  ],
+  "upstreams": [
+    {"id":"example-upstream","name":"示例后端","targets":[{"url":"http://127.0.0.1:3000","weight":1}],"healthPath":"/health"}
+  ]
+}

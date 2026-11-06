@@ -1,0 +1,44 @@
+# Local repository and tool configuration
+.git
+.agents
+.codex
+.aws
+.idea
+.vscode
+.DS_Store
+
+# Dependencies, generated assets and development artifacts
+**/node_modules
+web/dist
+bin
+coverage
+coverage.out
+**/__pycache__
+**/.pytest_cache
+*.test
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# Runtime data, deployments and secrets
+.data
+data
+admin-tls
+backups
+**/.env
+**/.env.*
+docker-compose.override.yml
+compose.override.yml
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*.keystore
+**/master.key
+**/dev-account.json
+**/legacy-export*.json
+**/gateway.db*
+**/*.sqlite
+**/*.sqlite3
