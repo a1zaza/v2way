@@ -356,7 +356,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer e.active.Add(-1)
 	defer func() {
 		entry.Status = rw.status
-		entry.Bytes = rw.bytes
+		entry.Bytes = rw.bytes.Load()
 		entry.DurationMs = time.Since(start).Milliseconds()
 		e.record(entry)
 	}()
@@ -813,7 +813,7 @@ func (e *Engine) Close() {
 type recorder struct {
 	http.ResponseWriter
 	status  int
-	bytes   int64
+	bytes   atomic.Int64
 	written bool
 	engine  *Engine
 	private bool
@@ -844,7 +844,7 @@ func (w *recorder) Write(b []byte) (int, error) {
 		w.WriteHeader(200)
 	}
 	n, err := w.ResponseWriter.Write(b)
-	w.bytes += int64(n)
+	w.bytes.Add(int64(n))
 	if n > 0 && w.renew != nil && w.status >= 200 && w.status < 400 {
 		w.renew()
 	}
@@ -866,7 +866,9 @@ func (w *recorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if w.renew != nil {
 		w.renew()
 	}
-	wrapped := &trackedConn{Conn: c, engine: w.engine, renew: w.renew}
+	// The original buffered writer sends the upgrade headers. Subsequent tunnel
+	// writes use wrapped, so only post-upgrade downstream bytes enter the log.
+	wrapped := &trackedConn{Conn: c, engine: w.engine, renew: w.renew, bytes: &w.bytes}
 	w.engine.mu.Lock()
 	w.engine.conns[wrapped] = struct{}{}
 	w.engine.mu.Unlock()
@@ -875,9 +877,11 @@ func (w *recorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 
 type trackedConn struct {
 	net.Conn
-	engine *Engine
-	once   sync.Once
-	renew  func()
+	engine  *Engine
+	once    sync.Once
+	renew   func()
+	bytes   *atomic.Int64
+	writeMu sync.Mutex
 }
 
 func (c *trackedConn) Read(p []byte) (int, error) {
@@ -888,7 +892,10 @@ func (c *trackedConn) Read(p []byte) (int, error) {
 	return n, err
 }
 func (c *trackedConn) Write(p []byte) (int, error) {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 	n, err := c.Conn.Write(p)
+	c.bytes.Add(int64(n))
 	if n > 0 && c.renew != nil {
 		c.renew()
 	}
@@ -897,6 +904,10 @@ func (c *trackedConn) Write(p []byte) (int, error) {
 
 func (c *trackedConn) Close() error {
 	err := c.Conn.Close()
+	// Closing the socket releases a blocked write. Wait for its byte count before
+	// returning to the handler that records the final access-log entry.
+	c.writeMu.Lock()
+	c.writeMu.Unlock()
 	c.once.Do(func() { c.engine.mu.Lock(); delete(c.engine.conns, c); c.engine.mu.Unlock() })
 	return err
 }
