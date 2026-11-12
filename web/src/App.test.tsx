@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from './main.tsx';
 import { formatPublicationTime } from './types.ts';
@@ -17,6 +17,7 @@ import {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 function backend({
@@ -155,6 +156,115 @@ async function addSite() {
   await user.click(within(dialog).getByRole('button', { name: '保留编辑' }));
   return user;
 }
+
+it('日志仅在访问日志页自动加载，离开或暂停停止，恢复与手动刷新可用', async () => {
+  vi.useFakeTimers();
+  const { calls } = backend();
+  const click = async (element: HTMLElement) => {
+    await act(async () => {
+      fireEvent.click(element);
+    });
+  };
+  render(<App />);
+  await act(async () => {});
+  expect(screen.getByRole('heading', { name: '网关运行概览' })).toBeTruthy();
+  const logCount = () => calls.filter((call) => call.path === '/logs').length;
+  const overviewCount = () => calls.filter((call) => call.path === '/overview').length;
+  expect(logCount()).toBe(0);
+  const initialOverview = overviewCount();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10000);
+  });
+  expect(logCount()).toBe(0);
+  expect(overviewCount()).toBeGreaterThan(initialOverview);
+  const navigate = async (name: string) => {
+    await click(within(screen.getByRole('navigation')).getByRole('button', { name }));
+  };
+  await navigate('访问日志');
+  expect(logCount()).toBe(1);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+  expect(logCount()).toBe(2);
+  await click(screen.getByRole('button', { name: '暂停刷新' }));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10000);
+  });
+  expect(logCount()).toBe(2);
+  await click(screen.getByRole('button', { name: '刷新' }));
+  expect(logCount()).toBe(3);
+  await click(screen.getByRole('button', { name: '恢复刷新' }));
+  expect(logCount()).toBe(4);
+  await navigate('运行概览');
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10000);
+  });
+  expect(logCount()).toBe(4);
+  await navigate('访问日志');
+  expect(logCount()).toBe(5);
+});
+
+it('慢日志请求不重叠，离开页面后取消请求并忽略迟到结果', async () => {
+  vi.useFakeTimers();
+  backend();
+  const normalFetch = globalThis.fetch;
+  let resolveLogs!: (response: Response) => void;
+  const pendingLogs = new Promise<Response>((resolve) => {
+    resolveLogs = resolve;
+  });
+  let logRequests = 0;
+  let signal: AbortSignal | null | undefined;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, options?: RequestInit) => {
+      if (url.endsWith('/logs')) {
+        logRequests++;
+        signal = options?.signal;
+        return logRequests === 1 ? pendingLogs : new Promise<Response>(() => {});
+      }
+      return normalFetch(url, options);
+    }),
+  );
+  const click = async (element: HTMLElement) => {
+    await act(async () => {
+      fireEvent.click(element);
+    });
+  };
+  render(<App />);
+  await act(async () => {});
+  const navigation = within(screen.getByRole('navigation'));
+  await click(navigation.getByRole('button', { name: '访问日志' }));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(15000);
+  });
+  expect(logRequests).toBe(1);
+  expect(signal?.aborted).toBe(false);
+  await click(navigation.getByRole('button', { name: '运行概览' }));
+  expect(signal?.aborted).toBe(true);
+  await act(async () => {
+    resolveLogs(
+      new Response(
+        JSON.stringify([
+          {
+            id: 'late',
+            path: '/late-log',
+            time: '2026-11-12T00:00:00Z',
+            site: '',
+            route: '',
+            method: 'GET',
+            status: 200,
+            durationMs: 1,
+            bytes: 2,
+            version: 0,
+          },
+        ]),
+      ),
+    );
+  });
+  await click(navigation.getByRole('button', { name: '访问日志' }));
+  expect(logRequests).toBe(2);
+  expect(screen.queryByText('/late-log')).toBeNull();
+});
 it('后端证书校验默认开启，显式忽略后可保存并重新编辑', async () => {
   const pool = {
     id: 'pool',

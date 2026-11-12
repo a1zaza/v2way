@@ -101,10 +101,16 @@ class APIError extends Error {
   }
 }
 let csrf = '';
-async function api<T>(path: string, method = 'GET', value?: unknown): Promise<T> {
+async function api<T>(
+  path: string,
+  method = 'GET',
+  value?: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
   const response = await fetch(`/api/admin/v1${path}`, {
     method,
     credentials: 'same-origin',
+    signal,
     headers: { 'Content-Type': 'application/json', ...(csrf ? { 'X-CSRF-Token': csrf } : {}) },
     ...(value === undefined ? {} : { body: JSON.stringify(value) }),
   });
@@ -332,18 +338,16 @@ export function App() {
   const load = useCallback(async () => {
     const o = await api<Overview>('/overview');
     setOverview(o);
-    const [d, cert, vs, entries, events] = await Promise.all([
+    const [d, cert, vs, events] = await Promise.all([
       api<Draft>('/draft'),
       api<Certificate[]>('/certificates'),
       api<Version[]>('/versions'),
-      api<LogEntry[]>('/logs'),
       api<Audit[]>('/audit'),
     ]);
     setDraft(d);
     setOverview(o);
     setCertificates(cert);
     setVersions(vs);
-    setLogs(entries);
     setAudit(events);
     setDirty(false);
     setConnected(true);
@@ -360,13 +364,9 @@ export function App() {
   useEffect(() => {
     if (!session) return;
     const timer = setInterval(() => {
-      Promise.all([
-        api<Overview>('/overview'),
-        !logPaused ? api<LogEntry[]>('/logs') : Promise.resolve(null),
-      ])
-        .then(([o, l]) => {
+      api<Overview>('/overview')
+        .then((o) => {
           setOverview(o);
-          if (l) setLogs(l);
           setConnected(true);
         })
         .catch((e) => {
@@ -375,7 +375,30 @@ export function App() {
         });
     }, 5000);
     return () => clearInterval(timer);
-  }, [session, handleError, logPaused]);
+  }, [session, handleError]);
+  useEffect(() => {
+    if (!session || page !== 'logs' || logPaused) return;
+    const controller = new AbortController();
+    let pending = false;
+    const refresh = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        const entries = await api<LogEntry[]>('/logs', 'GET', undefined, controller.signal);
+        if (!controller.signal.aborted) setLogs(entries);
+      } catch (err) {
+        if (!controller.signal.aborted) handleError(err);
+      } finally {
+        pending = false;
+      }
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 5000);
+    return () => {
+      clearInterval(timer);
+      controller.abort();
+    };
+  }, [session, page, logPaused, handleError]);
   useEffect(() => {
     const before = (e: BeforeUnloadEvent) => {
       if (dirty) {
