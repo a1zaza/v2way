@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"golang.org/x/net/idna"
+	"v2way/internal/headertemplate"
 )
 
 type Config struct {
@@ -67,6 +68,7 @@ type Route struct {
 	Streaming                    bool              `json:"streaming"`
 	RequestHeaders               map[string]string `json:"requestHeaders,omitempty"`
 	ResponseHeaders              map[string]string `json:"responseHeaders,omitempty"`
+	HeaderVariables              bool              `json:"headerVariables,omitempty"`
 }
 type Upstream struct {
 	ID            string   `json:"id"`
@@ -363,7 +365,19 @@ func Validate(c Config) []Issue {
 			default:
 				add(rf+".action", "不支持的路由动作")
 			}
-			for _, headers := range []map[string]string{r.RequestHeaders, r.ResponseHeaders} {
+			if r.HeaderVariables && r.Action != "proxy" {
+				add(rf+".headerVariables", "Header 变量仅支持反向代理路由")
+			}
+			for index, headers := range []map[string]string{r.RequestHeaders, r.ResponseHeaders} {
+				if r.HeaderVariables {
+					if _, err := headertemplate.CompileHeaders(headers); err != nil {
+						direction := "requestHeaders"
+						if index == 1 {
+							direction = "responseHeaders"
+						}
+						add(rf+"."+direction, fmt.Sprintf("站点「%s」路由「%s」（%s）：%s", s.Name, r.Name, r.ID, err))
+					}
+				}
 				for k, v := range headers {
 					if !validHeader(k) || protected[strings.ToLower(k)] || strings.ContainsAny(v, "\r\n") || len(v) > 8192 {
 						add(rf+".headers", "请求头名称、值无效或使用了协议保留字段")

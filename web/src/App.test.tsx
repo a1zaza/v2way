@@ -265,6 +265,124 @@ it('慢日志请求不重叠，离开页面后取消请求并忽略迟到结果'
   expect(logRequests).toBe(2);
   expect(screen.queryByText('/late-log')).toBeNull();
 });
+it('Header 变量默认关闭，校验失败保留编辑，保存模板并在发布预览逐字段展示', async () => {
+  const route = {
+    ...newRoute(),
+    id: 'route',
+    name: '变量路由',
+    upstreamId: 'u',
+    requestHeaders: { 'X-IP': '${remote_addr}' },
+  };
+  const site = {
+    ...newSite(),
+    id: 'site',
+    name: '变量站点',
+    domains: ['app.example.com'],
+    httpPort: 18080,
+    routes: [route],
+  };
+  const initialConfig = {
+    sites: [site],
+    upstreams: [{ id: 'u', name: '后端', targets: [{ url: 'http://127.0.0.1:8000', weight: 1 }] }],
+  };
+  const mock = backend({
+    initialConfig,
+    initialVersions: [
+      {
+        id: 1,
+        config: initialConfig,
+        createdAt: '2026-11-12T00:00:00Z',
+        note: '',
+        requestId: 'initial',
+      },
+    ],
+  });
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole('heading', { name: '网关运行概览' });
+  await user.click(
+    within(screen.getByRole('navigation')).getByRole('button', { name: /路由规则/ }),
+  );
+  await user.click(screen.getByRole('button', { name: '编辑规则' }));
+  await user.click(screen.getByText('Header 策略'));
+  const toggle = screen.getByRole('switch', { name: /^启用 Header 变量/ });
+  expect((toggle as HTMLInputElement).checked).toBe(false);
+  await user.click(toggle);
+  await user.click(screen.getByText('可用变量与复制'));
+  const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+  await user.click(screen.getByRole('button', { name: '复制变量 remote_addr' }));
+  expect(writeText).toHaveBeenCalledWith('${remote_addr}');
+  const requestInput = screen.getByLabelText('请求头（JSON 对象）');
+  fireEvent.change(requestInput, { target: { value: '{"X-IP":"${unknown}"}' } });
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '保留编辑' }));
+  expect(screen.getByRole('alert').textContent).toContain('请求头 X-IP');
+  expect((requestInput as HTMLTextAreaElement).value).toContain('${unknown}');
+  fireEvent.change(requestInput, { target: { value: '{"X-IP":"${remote_addr}"}' } });
+  fireEvent.change(screen.getByLabelText('响应头（JSON 对象）'), {
+    target: { value: '{"X-Trace":"${request_id}"}' },
+  });
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '保留编辑' }));
+  expect(mock.draft().config.sites[0].routes[0].headerVariables).toBeUndefined();
+  await user.click(screen.getByRole('button', { name: '保存草稿' }));
+  await waitFor(() => expect(mock.draft().config.sites[0].routes[0].headerVariables).toBe(true));
+  expect(mock.draft().config.sites[0].routes[0].requestHeaders?.['X-IP']).toBe('${remote_addr}');
+  await user.click(screen.getByRole('button', { name: '预览并发布' }));
+  const preview = await screen.findByRole('region', { name: '路由 Header 变更' });
+  expect(within(preview).getByText('Header 变量')).toBeTruthy();
+  expect(within(preview).queryByText('请求头模板')).toBeNull();
+  expect(within(preview).getByText('响应头模板')).toBeTruthy();
+  expect(
+    within(preview).getByLabelText('变量站点 / 变量路由 响应头模板 之后').textContent,
+  ).toContain('${request_id}');
+});
+
+it('关闭 Header 变量保留原文，切换非代理动作清除变量开关', async () => {
+  const route = {
+    ...newRoute(),
+    id: 'route',
+    name: '变量路由',
+    upstreamId: 'u',
+    headerVariables: true,
+    requestHeaders: { 'X-IP': '${remote_addr}' },
+  };
+  const site = {
+    ...newSite(),
+    id: 'site',
+    name: '站点',
+    domains: ['app.example.com'],
+    httpPort: 18080,
+    routes: [route],
+  };
+  const mock = backend({
+    initialConfig: {
+      sites: [site],
+      upstreams: [
+        { id: 'u', name: '后端', targets: [{ url: 'http://127.0.0.1:8000', weight: 1 }] },
+      ],
+    },
+  });
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole('heading', { name: '网关运行概览' });
+  await user.click(
+    within(screen.getByRole('navigation')).getByRole('button', { name: /路由规则/ }),
+  );
+  await user.click(screen.getByRole('button', { name: '编辑规则' }));
+  await user.click(screen.getByText('Header 策略'));
+  await user.click(screen.getByRole('switch', { name: /^启用 Header 变量/ }));
+  expect((screen.getByLabelText('请求头（JSON 对象）') as HTMLTextAreaElement).value).toContain(
+    '${remote_addr}',
+  );
+  await user.click(screen.getByRole('switch', { name: /^启用 Header 变量/ }));
+  await user.click(screen.getByRole('combobox', { name: '动作类型' }));
+  await user.click(screen.getByRole('option', { name: '固定响应' }));
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '保留编辑' }));
+  await user.click(screen.getByRole('button', { name: '保存草稿' }));
+  await waitFor(() => expect(mock.draft().config.sites[0].routes[0].action).toBe('response'));
+  expect(mock.draft().config.sites[0].routes[0].headerVariables).toBeUndefined();
+  expect(mock.draft().config.sites[0].routes[0].requestHeaders?.['X-IP']).toBe('${remote_addr}');
+});
+
 it('后端证书校验默认开启，显式忽略后可保存并重新编辑', async () => {
   const pool = {
     id: 'pool',

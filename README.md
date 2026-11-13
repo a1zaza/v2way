@@ -146,6 +146,7 @@ go build -trimpath -o bin/v2way ./cmd/v2way
 - [ACME 证书](docs/acme-certificates.md)
 - [IP 授权与访问码](docs/access-control.md)
 - [路由超时](docs/route-timeouts.md)
+- [反代 Header 变量](docs/proxy-header-variables.md)
 - [后端 TLS 校验](docs/upstream-tls.md)
 - [后端流量统计](docs/upstream-traffic-stats.md)
 - [JSON 存储与恢复](docs/json-storage.md)

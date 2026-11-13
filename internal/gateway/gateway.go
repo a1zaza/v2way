@@ -25,6 +25,7 @@ import (
 	"v2way/internal/accessgate"
 	"v2way/internal/certificate"
 	"v2way/internal/config"
+	"v2way/internal/headertemplate"
 	"v2way/internal/store"
 )
 
@@ -74,11 +75,12 @@ type pool struct {
 }
 type site struct {
 	config.Site
-	routes []config.Route
-	cert   *tls.Certificate
-	mu     sync.Mutex
-	tokens float64
-	last   time.Time
+	headerTemplates map[string]routeHeaderTemplates
+	routes          []config.Route
+	cert            *tls.Certificate
+	mu              sync.Mutex
+	tokens          float64
+	last            time.Time
 }
 type Snapshot struct {
 	Version        int64
@@ -159,12 +161,24 @@ func (e *Engine) Compile(c config.Config) (*Snapshot, error) {
 	}
 	for _, v := range c.Sites {
 		item := &site{Site: v, routes: append([]config.Route{}, v.Routes...), tokens: float64(v.RatePerSecond), last: time.Now()}
+		item.headerTemplates = map[string]routeHeaderTemplates{}
 		item.Domains = append([]string{}, v.Domains...)
 		for i, d := range item.Domains {
 			item.Domains[i], _ = config.Domain(d)
 		}
 		config.SortRoutes(item.routes)
 		for _, r := range item.routes {
+			if r.HeaderVariables {
+				request, err := headertemplate.CompileHeaders(r.RequestHeaders)
+				if err != nil {
+					return fail(err)
+				}
+				response, err := headertemplate.CompileHeaders(r.ResponseHeaders)
+				if err != nil {
+					return fail(err)
+				}
+				item.headerTemplates[r.ID] = routeHeaderTemplates{request, response}
+			}
 			if r.Action == config.LoginAction {
 				s.hasLoginRoutes = true
 			}
@@ -463,8 +477,25 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if entry.Route == "" {
 		entry.Route = route.Path
 	}
-	for k, v := range route.ResponseHeaders {
+	requestHeaders, responseHeaders := route.RequestHeaders, route.ResponseHeaders
+	if route.HeaderVariables {
+		context := headerContext(r, entry.ID, s.ID, route.ID)
+		templates := s.headerTemplates[route.ID]
+		var err error
+		requestHeaders, err = templates.request.Expand(context)
+		if err == nil {
+			responseHeaders, err = templates.response.Expand(context)
+		}
+		if err != nil {
+			http.Error(w, "请求信息无法用于 Header 变量", http.StatusBadRequest)
+			return
+		}
+	}
+	for k, v := range responseHeaders {
 		w.Header().Set(k, v)
+	}
+	if route.HeaderVariables && !s.ForwardAdminCookie {
+		stripAdminResponseCookie(w.Header())
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, int64(s.MaxBodyMiB)<<20)
 	if r.ContentLength > int64(s.MaxBodyMiB)<<20 {
@@ -524,13 +555,21 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 				pr.Out.URL.RawPath = ""
 			}
-			for k, v := range route.RequestHeaders {
+			for k, v := range requestHeaders {
 				pr.Out.Header.Set(k, v)
 			}
 			if !s.ForwardAdminCookie {
 				stripAdminRequestCookie(pr.Out.Header)
 			}
 		}, ModifyResponse: func(resp *http.Response) error {
+			if route.HeaderVariables {
+				for k, v := range responseHeaders {
+					// Remove the early error-response fallback before ReverseProxy
+					// copies upstream headers, so configured values appear once.
+					w.Header().Del(k)
+					resp.Header.Set(k, v)
+				}
+			}
 			if !s.ForwardAdminCookie {
 				stripAdminResponseCookie(resp.Header)
 			}

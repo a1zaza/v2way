@@ -143,6 +143,7 @@
 - 路由超时默认：总处理 60 秒、连接 5 秒（含 DNS 和全部 IP 尝试）、TLS 握手 5 秒、响应头 30 秒；整数 0–86400，0 继承默认。同池不同阶段超时隔离 Transport。
 - 响应前超时返回 504，正文开始后中断连接；流式/WebSocket 免总预算，阶段预算仍生效，尚无流式空闲超时。详见 [路由超时](docs/route-timeouts.md)。
 - 后端池 `skipTlsVerify` 默认关闭，开启后覆盖普通代理、流式/WebSocket、独立超时连接池及健康探测；草稿发布后生效，不改变站点对外证书与未知 SNI 拒绝策略。详见 [后端 TLS](docs/upstream-tls.md)。
+- 代理路由 `headerVariables` 默认关闭，开启后请求/响应头值支持 `${remote_addr}` 等 10 个变量，按配置快照编译、按原始请求展开；`$$` 为字面量美元符号，旧配置和关闭模式原文透传。来源只取实际连接，不信任转发头；保留字段、管理 Cookie 及 IP 授权缓存策略保持生效。使用见 [Header 变量](docs/proxy-header-variables.md)。
 - 后端池统计本次运行请求数及上下行正文/隧道字节，每 5 秒刷新，排除健康探测。同 ID 连续发布保留，删除重建或进程重启清零，不持久化；未发布/不可用显示破折号，运行零值显示 0。详见 [流量统计](docs/upstream-traffic-stats.md)。
 - 访问日志 `bytes` 为单次请求下行体积：HTTP 正文或升级后的隧道字节（含 WebSocket 帧、排除握手头），不包含上行。升级连接结束后记录最终日志，关闭时等待进行中的写入完成计数；实时上下行看后端卡片。
 
@@ -154,6 +155,7 @@
 
 # 其他备忘
 
+- 反代 Header 变量设计与验证范围见 [Header 变量设计](docs/proxy-header-variables-design.md)；开启模式的响应头以路由配置替换后端同名值，关闭模式保持旧追加行为，发布预览按原始模板逐字段展示。
 - GitHub Actions 与公开 GHCR、host 网络的设计和实施边界见 [镜像发布迁移设计](docs/github-actions-ghcr-design.md)；本地配置完成不代表已推送源码、发布镜像或调整包可见性。
 - 安全检查与修复记录见 [2026-11-05 安全审查](docs/security-review-2026-11-05.md)。站点 `forwardAdminCookie` 默认为 false，关闭时过滤请求的管理 Cookie 与响应的同名 Set-Cookie；开启后仅按开关保留，不检查后端地址。代理管理控制台需显式开启并发布；普通应用 Cookie 保留。
 - 管理服务器统一通过 `admin.HTTPServer` 创建：请求头 10 秒、请求头及正文总读取 15 秒；登录 JSON 最多 8 KiB，并发登录上限 16。此策略不应用于业务 SSE/WebSocket 监听。

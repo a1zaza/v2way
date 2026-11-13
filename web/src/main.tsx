@@ -47,12 +47,14 @@ import {
 import { AcmePanel, type AcmeJob } from './acme-panel.tsx';
 import { SiteCards, UpstreamCards, CertificateCards } from './object-cards.tsx';
 import { mergeCertificateJobs } from './card-state.ts';
+import { headerVariables, validateHeaderVariables } from './header-variables.ts';
 import { ConfigImport } from './config-import.tsx';
 import { AccessControlPanel } from './access-control-panel.tsx';
 import { SiteAccessAccount } from './site-access-account.tsx';
 import { RouteRecords, LogRecords, SiteStatus } from './records.tsx';
 import {
   configChanges,
+  configValuesEqual,
   emptyConfig,
   formatTime,
   formatPublicationTime,
@@ -1799,11 +1801,17 @@ function EditorModal({
           )
             throw new Error('请求头配置必须是键和值均为字符串的 JSON 对象。');
         }
+        if (route.action === 'proxy' && route.headerVariables) {
+          validateHeaderVariables(req as Record<string, string>, '请求头');
+          validateHeaderVariables(resp as Record<string, string>, '响应头');
+        }
         onSave({
           siteId,
           route: {
             ...route,
             upstreamId: route.action === 'proxy' ? route.upstreamId : undefined,
+            headerVariables:
+              route.action === 'proxy' ? route.headerVariables || undefined : undefined,
             root: route.action === 'static' ? route.root : undefined,
             location: route.action === 'redirect' ? route.location : undefined,
             methods:
@@ -2198,6 +2206,7 @@ function EditorModal({
                     setRoute({
                       ...route,
                       action: value as Route['action'],
+                      headerVariables: value === 'proxy' ? route.headerVariables : undefined,
                       status: value === 'redirect' ? 302 : 200,
                       ...(value === 'access_login'
                         ? {
@@ -2402,7 +2411,41 @@ function EditorModal({
               )}
               {route.action !== 'access_login' && (
                 <details className="advanced">
-                  <summary>高级请求头策略</summary>
+                  <summary>Header 策略</summary>
+                  {route.action === 'proxy' && (
+                    <>
+                      <Toggle
+                        label="启用 Header 变量"
+                        checked={!!route.headerVariables}
+                        description="开启后展开请求头与响应头中的变量；关闭时按固定字符串使用，保存草稿并发布后生效。"
+                        onChange={(enabled) =>
+                          setRoute({ ...route, headerVariables: enabled || undefined })
+                        }
+                      />
+                      {route.headerVariables && (
+                        <>
+                          <p className="muted small">
+                            {
+                              '使用 ${remote_addr} 等变量，可与固定文本拼接；$$ 表示字面量 $，$${remote_addr} 保留原文。保留字段仍由网关管理。'
+                            }
+                          </p>
+                          <details className="advanced">
+                            <summary>可用变量与复制</summary>
+                            <dl className="header-variable-list">
+                              {headerVariables.map(([name, description]) => (
+                                <div key={name}>
+                                  <dt>
+                                    <CopyText value={`\${${name}}`} label={`变量 ${name}`} />
+                                  </dt>
+                                  <dd>{description}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          </details>
+                        </>
+                      )}
+                    </>
+                  )}
                   <Field label="请求头（JSON 对象）">
                     <textarea
                       className="mono"
@@ -2463,6 +2506,35 @@ function PublishModal({
   const [note, setNote] = useState('');
   const certificateName = (id?: string) =>
     certificates.find((c) => c.id === id)?.name || id || '无';
+  const headerChanges = [
+    ...config.sites,
+    ...active.sites.filter((old) => !config.sites.some((s) => s.id === old.id)),
+  ].flatMap((site) => {
+    const before = active.sites.find((s) => s.id === site.id)?.routes ?? [];
+    const after = config.sites.find((s) => s.id === site.id)?.routes ?? [];
+    return [...after, ...before.filter((old) => !after.some((r) => r.id === old.id))].flatMap(
+      (route) => {
+        const old = before.find((r) => r.id === route.id);
+        const next = after.find((r) => r.id === route.id);
+        const fields = [
+          { label: 'Header 变量', before: !!old?.headerVariables, after: !!next?.headerVariables },
+          {
+            label: '请求头模板',
+            before: old?.requestHeaders ?? {},
+            after: next?.requestHeaders ?? {},
+          },
+          {
+            label: '响应头模板',
+            before: old?.responseHeaders ?? {},
+            after: next?.responseHeaders ?? {},
+          },
+        ].filter((field) => !configValuesEqual(field.before, field.after));
+        return fields.length
+          ? [{ id: route.id, name: `${site.name} / ${route.name || route.path}`, fields }]
+          : [];
+      },
+    );
+  });
   const impactFields = (site: Site) => [
     { label: '站点状态', value: siteStatusLabel(site) },
     { label: 'HTTP 端口', value: String(site.httpPort || '关闭') },
@@ -2548,6 +2620,59 @@ function PublishModal({
                 </div>
               ))}
           </section>
+          {headerChanges.length > 0 && (
+            <section className="publish-impact" aria-label="路由 Header 变更">
+              <h3>路由 Header 变更</h3>
+              {headerChanges.map((change) => (
+                <div className="publish-site-impact" key={change.id}>
+                  <h4>{change.name}</h4>
+                  <dl>
+                    {change.fields.map((field) => (
+                      <div className="publish-impact-row" key={field.label}>
+                        <dt>{field.label}</dt>
+                        <dd>
+                          <span>之前</span>
+                          {typeof field.before === 'boolean' ? (
+                            field.before ? (
+                              '开启'
+                            ) : (
+                              '关闭'
+                            )
+                          ) : (
+                            <pre
+                              tabIndex={0}
+                              className="header-template-preview"
+                              aria-label={`${change.name} ${field.label} 之前`}
+                            >
+                              {JSON.stringify(field.before, null, 2)}
+                            </pre>
+                          )}
+                        </dd>
+                        <dd>
+                          <span>之后</span>
+                          {typeof field.after === 'boolean' ? (
+                            field.after ? (
+                              '开启'
+                            ) : (
+                              '关闭'
+                            )
+                          ) : (
+                            <pre
+                              tabIndex={0}
+                              className="header-template-preview"
+                              aria-label={`${change.name} ${field.label} 之后`}
+                            >
+                              {JSON.stringify(field.after, null, 2)}
+                            </pre>
+                          )}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              ))}
+            </section>
+          )}
           <div className="diff-list">
             {changes.map((c, i) => (
               <div key={i}>

@@ -20,6 +20,7 @@ export type Route = {
   streaming: boolean;
   requestHeaders?: Record<string, string>;
   responseHeaders?: Record<string, string>;
+  headerVariables?: boolean;
 };
 export type Site = {
   id: string;
