@@ -142,3 +142,58 @@ it('登录链接拒绝外部域名和错误路径，支持通配域名及 IPv6',
     'https://[::1]:8443/access',
   );
 });
+
+it('可指定带前导零的访问码，校验失败不提交，成功清空输入并添加路由', async () => {
+  const user = userEvent.setup(),
+    created = vi.fn();
+  const request = vi.fn(async (_p: string, method = 'GET') =>
+    method === 'GET'
+      ? { initialized: false, enabled: false, revision: 0, pending: false }
+      : { code: '00123456', revision: 1 },
+  );
+  render(
+    <SiteAccessAccount
+      request={request as <T>(p: string, m?: string, v?: unknown) => Promise<T>}
+      site={site}
+      onBusyChange={() => {}}
+      onCreateRoute={created}
+    />,
+  );
+  await screen.findByText('尚未生成访问码');
+  const input = screen.getByLabelText('指定访问码');
+  await user.type(input, '123');
+  await user.click(screen.getByRole('button', { name: '保存指定访问码' }));
+  expect(await screen.findByRole('alert')).toHaveProperty('textContent', '访问码必须为 8 位数字');
+  expect(request).toHaveBeenCalledTimes(1);
+  await user.clear(input);
+  await user.type(input, '00123456');
+  await user.click(screen.getByRole('button', { name: '保存指定访问码' }));
+  await screen.findByRole('button', { name: '复制链接及访问码' });
+  expect(request).toHaveBeenLastCalledWith('/access-control/sites/site-a/account', 'POST', {
+    revision: 0,
+    code: '00123456',
+  });
+  expect(input).toHaveProperty('value', '');
+  expect(created).toHaveBeenCalledTimes(1);
+});
+it('指定访问码保存失败后保留输入以便重试', async () => {
+  const user = userEvent.setup();
+  const request = async <T,>(_p: string, method = 'GET'): Promise<T> => {
+    if (method === 'POST') throw Error('保存失败');
+    return { initialized: true, enabled: true, revision: 1, pending: false } as T;
+  };
+  render(
+    <SiteAccessAccount
+      request={request}
+      site={site}
+      onBusyChange={() => {}}
+      onCreateRoute={() => {}}
+    />,
+  );
+  await screen.findByText('访问码已生成');
+  await user.type(screen.getByLabelText('指定访问码'), '00123456');
+  await user.click(screen.getByRole('button', { name: '保存指定访问码' }));
+  await screen.findByRole('alert');
+  expect(screen.getByLabelText('指定访问码')).toHaveProperty('value', '00123456');
+  expect(screen.queryByRole('button', { name: '复制链接及访问码' })).toBeNull();
+});

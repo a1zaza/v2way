@@ -15,6 +15,7 @@ import (
 )
 
 var siteAccountID = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+var siteAccessCode = regexp.MustCompile(`^[0-9]{8}$`)
 
 func (s *Server) accessReady(c config.Config) error {
 	for _, site := range c.Sites {
@@ -54,7 +55,8 @@ func (s *Server) accessControl(w http.ResponseWriter, r *http.Request, path stri
 			return
 		}
 		var in struct {
-			Revision *int64 `json:"revision"`
+			Revision *int64  `json:"revision"`
+			Code     *string `json:"code"`
 		}
 		if !decode(w, r, &in) {
 			return
@@ -63,8 +65,12 @@ func (s *Server) accessControl(w http.ResponseWriter, r *http.Request, path stri
 			fail(w, 400, "需要当前站点账号修订")
 			return
 		}
+		if in.Code != nil && !siteAccessCode.MatchString(*in.Code) {
+			fail(w, 400, "访问码必须为 8 位数字")
+			return
+		}
 		if !s.limiter.take(r.RemoteAddr) {
-			fail(w, 429, "生成过于频繁，请稍后重试")
+			fail(w, 429, "设置过于频繁，请稍后重试")
 			return
 		}
 		s.limiter.login.Lock()
@@ -73,15 +79,20 @@ func (s *Server) accessControl(w http.ResponseWriter, r *http.Request, path stri
 			storageFailure(w, store.ErrConflict)
 			return
 		}
-		passwordNumber, err := rand.Int(rand.Reader, big.NewInt(100_000_000))
-		if err != nil {
-			fail(w, 500, "生成访问码失败")
-			return
+		var plain string
+		if in.Code != nil {
+			plain = *in.Code
+		} else {
+			passwordNumber, err := rand.Int(rand.Reader, big.NewInt(100_000_000))
+			if err != nil {
+				fail(w, 500, "生成访问码失败")
+				return
+			}
+			plain = fmt.Sprintf("%08d", passwordNumber)
 		}
-		plain := fmt.Sprintf("%08d", passwordNumber)
 		hash, err := HashPassword(plain)
 		if err != nil {
-			fail(w, 500, "生成访问码失败")
+			fail(w, 500, "设置访问码失败")
 			return
 		}
 		if err := s.store.UpdateAccessAccountFrom(siteID, *in.Revision, "访问码", hash, time.Now(), requestSourceIP(r)); err != nil {

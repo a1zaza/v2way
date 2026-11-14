@@ -88,3 +88,48 @@ func TestSiteAccountGenerationAndRotation(t *testing.T) {
 		t.Fatal("列表查询失败", list.Code)
 	}
 }
+
+func TestSiteAccountCustomCode(t *testing.T) {
+	h := setup(t)
+	path := "/access-control/sites/site-a/account"
+	for _, code := range []any{"", "1234567", "123456789", "abcdefgh", "１２３４５６７８", "1234567\n", " 12345678", 12345678} {
+		w := h.call("POST", path, map[string]any{"revision": 0, "code": code}, true)
+		if w.Code != 400 {
+			t.Fatalf("无效访问码被接受: %v: %d", code, w.Code)
+		}
+	}
+	for revision, code := range []string{"00123456", "00876543"} {
+		w := h.call("POST", path, map[string]any{"revision": revision, "code": code}, true)
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		var value struct {
+			Code     string
+			Revision int64
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &value); err != nil {
+			t.Fatal(err)
+		}
+		if value.Code != code || value.Revision != int64(revision+1) {
+			t.Fatal("未保留指定值或修订", value)
+		}
+		account, err := h.store.AccessAccount("site-a")
+		if err != nil || !verify(code, account.PasswordHash) {
+			t.Fatal("指定访问码不可用", err)
+		}
+		if revision == 0 {
+			if _, err := h.store.AuthorizeIP("site-a", "192.0.2.9", value.Revision, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+		} else if _, ok := h.store.CheckAccessIP("site-a", "192.0.2.9", time.Now()); !ok {
+			t.Fatal("指定访问码清除了已有授权")
+		}
+		metadata := h.call("GET", path, nil, true)
+		if strings.Contains(metadata.Body.String(), code) {
+			t.Fatal("元数据回显明文")
+		}
+	}
+	if w := h.call("POST", path, map[string]any{"revision": 0, "code": "12345678"}, true); w.Code != 409 {
+		t.Fatal("旧修订可覆盖指定访问码", w.Code)
+	}
+}

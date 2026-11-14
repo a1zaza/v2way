@@ -76,6 +76,7 @@ export function SiteAccessAccount({
     [issued, setIssued] = useState<Issued | null>(null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
+    [code, setCode] = useState(''),
     [domain, setDomain] = useState(() => site.domains.find((d) => !d.startsWith('*.')) ?? ''),
     [candidate, setCandidate] = useState('/access');
   const sequence = useRef(0);
@@ -89,6 +90,7 @@ export function SiteAccessAccount({
     let active = true;
     setStatus(null);
     setIssued(null);
+    setCode('');
     void request<Status>(endpoint)
       .then((value) => {
         if (active) setStatus(value);
@@ -114,9 +116,13 @@ export function SiteAccessAccount({
   );
   const conflict =
     !login && site.routes.some((r) => r.path === path || r.path.startsWith(path + '/'));
-  async function generate() {
+  async function generate(custom = false) {
     if (busy || !status) return;
     setError('');
+    if (custom && !/^[0-9]{8}$/.test(code)) {
+      setError('访问码必须为 8 位数字');
+      return;
+    }
     if (!url) {
       setError('请先启用 HTTPS、填写有效端口，并确认登录域名及路径。');
       return;
@@ -130,9 +136,13 @@ export function SiteAccessAccount({
     onBusyChange(true);
     setIssued(null);
     try {
-      const value = await request<Issued>(endpoint, 'POST', { revision: status.revision });
+      const value = await request<Issued>(endpoint, 'POST', {
+        revision: status.revision,
+        ...(custom ? { code } : {}),
+      });
       if (id !== sequence.current) return;
       setIssued(value);
+      setCode('');
       setStatus({
         ...status,
         initialized: true,
@@ -170,8 +180,7 @@ export function SiteAccessAccount({
     <section className="site-access-account">
       <div className="form-section-title">本站访问码</div>
       <p className="muted small">
-        一键生成 8
-        位随机数字访问码，明文输入即可授权；重置访问码不影响已授权登录，其他站点不受影响。
+        可指定 8 位数字访问码，也可随机生成；重置访问码不影响已授权登录，其他站点不受影响。
       </p>
       {status && (
         <Badge tone={status.initialized ? 'success' : 'warning'}>
@@ -201,7 +210,7 @@ export function SiteAccessAccount({
         hint={
           login
             ? '使用本站已配置的登录路由，修改路径请编辑路由规则。'
-            : '首次生成时将添加此登录路由到本地编辑，保存草稿并发布后生效。'
+            : '首次设置时将添加此登录路由到本地编辑，保存草稿并发布后生效。'
         }
       >
         <input
@@ -211,7 +220,31 @@ export function SiteAccessAccount({
           onChange={(e) => setCandidate(e.target.value)}
         />
       </Field>
+      <Field label="指定访问码" hint="填写 8 位数字，保留前导零；留空时可使用随机生成。">
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]{8}"
+          maxLength={8}
+          autoComplete="off"
+          value={code}
+          disabled={busy}
+          onChange={(e) => setCode(e.target.value)}
+        />
+      </Field>
       <div className="settings-actions">
+        <button
+          type="button"
+          className="secondary"
+          disabled={
+            busy || !status || status.pending || !!status.problem || !url || conflict || !code
+          }
+          onClick={() => {
+            void generate(true);
+          }}
+        >
+          保存指定访问码
+        </button>
         <button
           type="button"
           className="secondary"
@@ -221,7 +254,7 @@ export function SiteAccessAccount({
           }}
         >
           {busy
-            ? '正在生成'
+            ? '正在保存'
             : status?.initialized
               ? '重新生成访问码'
               : login
