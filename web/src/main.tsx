@@ -78,6 +78,8 @@ import {
 } from './types.ts';
 import './style.css';
 
+const logoURL = new URL('./assets/brand/logo.svg', import.meta.url).href;
+
 const nav = [
   ['overview', '运行概览', LayoutDashboard],
   ['sites', '站点管理', Globe2],
@@ -152,7 +154,7 @@ function Login({ onLogin }: { onLogin: (s: Session) => void }) {
       <div className="login-story">
         <div className="brand">
           <span className="brand-mark">
-            <Waypoints size={23} />
+            <img src={logoURL} alt="" width={35} height={35} />
           </span>
           v2way<span className="version-label">统一网关</span>
         </div>
@@ -667,7 +669,7 @@ export function App() {
       <aside id="mobile-sidebar" className={mobile ? 'sidebar open' : 'sidebar'}>
         <div className="brand">
           <span className="brand-mark">
-            <Waypoints size={23} />
+            <img src={logoURL} alt="" width={35} height={35} />
           </span>
           <span>
             v2way<small>统一网关控制台</small>

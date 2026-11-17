@@ -165,4 +165,5 @@
 - 产品边界见 [统一网关设计](docs/unified-gateway-design.md)，已实现与待完成项见 [实施状态](docs/implementation-status.md)，页面布局记录见 [布局优化](docs/ui-layout-optimization-plan.md)。
 - 面向 GitHub 的迭代方向与任务清单维护于根目录 [ROADMAP.md](ROADMAP.md)，README 提供入口；勾选表示对应实现与本地检查完成，生产或真实环境验收单独记录，不承诺未经确定的发布日期。
 - README 作为 GitHub 项目首页，保留功能、快速部署与文档导航；本地启动、测试和源码构建步骤集中维护于 [开发指南](docs/development.md)。
+- 品牌 Logo 统一使用 `web/src/assets/brand/logo.svg`，蓝色 v 与青色并行通路置于深色圆角底；登录页、侧边栏、浏览器 SVG 图标与 README 复用同一资源，Vite 在发布时处理资源路径。
 - 真实 CA/DNS、完整加密备份、生产容量/稳定性、跨浏览器、真机软键盘及完整无障碍验证需要各自的实际证据，不因局部模拟测试通过而标记完成。

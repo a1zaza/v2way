@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="web/src/assets/brand/logo.svg" width="96" height="96" alt="v2way Logo" />
+
 # v2way
 
 **通过中文控制台管理的 HTTP/HTTPS 网关**

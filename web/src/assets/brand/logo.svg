@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+  <title>v2way 标志</title>
+  <rect width="64" height="64" rx="16" fill="#18232F"/>
+  <path d="M14 19L28 45L42 19" stroke="#65AFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M38 45L52 19" stroke="#5EDAC7" stroke-width="6" stroke-linecap="round"/>
+</svg>
