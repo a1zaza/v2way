@@ -151,6 +151,7 @@
 
 - 支持 HTTP-01、DNS-01；DNS 服务商为 Cloudflare、腾讯云 DNSPod、阿里云、DigitalOcean、Linode、RFC 2136。CF 需 Zone:Read 与 DNS:Edit；腾讯云用 SecretId/SecretKey，不用旧 DNSPod 令牌。
 - HTTP-01 要求公网 80 挑战路径转发到业务 HTTP 入口，开发前端/回环管理入口不会自动满足条件；DNS-01 可供内网站点使用，但域名必须可公开验证。程序不提权开放端口。
+- 签发任务按待处理与历史分组：只将每张证书最新的 queued/running/unknown/interrupted 任务列入待处理，failed/succeeded 及旧任务保留历史；最新失败任务可从历史重试，分组不影响自动续期和订单恢复。
 - 控制台显式提交、接受 CA 条款后签发，默认测试 CA，测试证书不受浏览器信任。自动续期每小时检查，失败保留旧证书，结果未知停止自动重放；恢复时查询原订单。详见 [ACME](docs/acme-certificates.md)。
 
 # 其他备忘

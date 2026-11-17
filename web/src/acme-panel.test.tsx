@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { cleanup, render, screen, within, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AcmePanel, type AcmeJob } from './acme-panel.tsx';
 import type { ComponentProps } from 'react';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 const providers = [
   {
     id: 'cloudflare',
@@ -117,4 +120,110 @@ it('共享签发任务仅在读取完成后更新卡片状态', async () => {
   expect(onJobsChange).not.toHaveBeenCalled();
   finish([job]);
   await waitFor(() => expect(onJobsChange).toHaveBeenCalledWith([job]));
+});
+
+it('失败和已完成任务自动归入历史，只保留每张证书当前待处理任务', async () => {
+  const jobs: AcmeJob[] = [
+    {
+      ...job,
+      id: 'old-failed',
+      name: '旧失败',
+      status: 'failed',
+      createdAt: '2026-11-01T00:00:00Z',
+    },
+    {
+      ...job,
+      id: 'success',
+      name: '重试成功',
+      status: 'succeeded',
+      createdAt: '2026-11-02T00:00:00Z',
+    },
+    { ...job, id: 'failed', certificateId: 'failed-cert', name: '签发失败', status: 'failed' },
+    {
+      ...job,
+      id: 'old-unknown',
+      certificateId: 'active-cert',
+      name: '旧待确认',
+      status: 'unknown',
+      createdAt: '2026-11-01T00:00:00Z',
+    },
+    {
+      ...job,
+      id: 'active',
+      certificateId: 'active-cert',
+      name: '正在签发',
+      status: 'running',
+      createdAt: '2026-11-02T00:00:00Z',
+    },
+    { ...job, id: 'unknown', certificateId: 'unknown-cert', name: '待确认订单', status: 'unknown' },
+    {
+      ...job,
+      id: 'interrupted',
+      certificateId: 'interrupted-cert',
+      name: '中断订单',
+      status: 'interrupted',
+    },
+    { ...job, id: 'queued', certificateId: 'queued-cert', name: '等待订单' },
+  ];
+  const request = vi.fn(async (path: string) =>
+    path === '/acme/providers' ? [] : jobs,
+  ) as ComponentProps<typeof AcmePanel>['request'];
+  const onJobsChange = vi.fn();
+  render(<AcmePanel request={request} onRefresh={async () => {}} onJobsChange={onJobsChange} />);
+  const pending = (await screen.findByText('待处理任务 · 4 条')).closest('details')!;
+  const history = screen.getByText('任务历史 · 4 条').closest('details')!;
+  for (const name of ['正在签发', '待确认订单', '中断订单', '等待订单'])
+    expect(within(pending).getByText(name)).toBeTruthy();
+  for (const name of ['旧失败', '重试成功', '签发失败', '旧待确认']) {
+    expect(within(history).getByText(name)).toBeTruthy();
+    expect(within(pending).queryByText(name)).toBeNull();
+  }
+  expect(within(history).getAllByRole('button', { name: '检查并重试', hidden: true })).toHaveLength(
+    1,
+  );
+  expect(onJobsChange).toHaveBeenCalledWith(jobs);
+});
+it('轮询读取失败状态后自动移出待处理，刷新页面后仍只在历史显示', async () => {
+  vi.useFakeTimers();
+  let jobs = [job];
+  const request = vi.fn(async (path: string) =>
+    path === '/acme/providers' ? [] : jobs,
+  ) as ComponentProps<typeof AcmePanel>['request'];
+  const props = { request, onRefresh: async () => {} };
+  const view = render(<AcmePanel {...props} />);
+  await act(async () => {});
+  expect(screen.getByText('待处理任务 · 1 条')).toBeTruthy();
+  jobs = [{ ...job, status: 'failed', message: 'DNS 验证失败' }];
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+  expect(screen.getByText('待处理任务 · 0 条')).toBeTruthy();
+  expect(screen.getByText('任务历史 · 1 条')).toBeTruthy();
+  view.unmount();
+  render(<AcmePanel {...props} />);
+  await act(async () => {});
+  expect(screen.getByText('待处理任务 · 0 条')).toBeTruthy();
+  expect(screen.getByText('DNS 验证失败')).toBeTruthy();
+});
+
+it('从失败历史重试会新增待处理任务并展开清单，旧失败保留历史', async () => {
+  const user = userEvent.setup();
+  const failed = { ...job, status: 'failed', name: '失败历史', createdAt: '2026-11-01T00:00:00Z' };
+  const queued = { ...job, id: 'retry-job', name: '重试任务', createdAt: '2026-11-02T00:00:00Z' };
+  const request = vi.fn(async (path: string) => {
+    if (path === '/acme/providers') return [];
+    if (path === '/acme/jobs') return [failed];
+    return queued;
+  }) as ComponentProps<typeof AcmePanel>['request'];
+  render(<AcmePanel request={request} onRefresh={async () => {}} />);
+  await user.click(await screen.findByText('任务历史 · 1 条'));
+  await user.click(screen.getByRole('button', { name: '检查并重试' }));
+  const pending = (await screen.findByText('待处理任务 · 1 条')).closest('details')!;
+  expect(pending.open).toBe(true);
+  expect(within(pending).getByText('重试任务')).toBeTruthy();
+  expect(
+    within(screen.getByText('任务历史 · 1 条').closest('details')!).getByText('失败历史'),
+  ).toBeTruthy();
+  expect(screen.queryByRole('button', { name: '检查并重试' })).toBeNull();
+  expect(request).toHaveBeenLastCalledWith('/certificates/cert-id/renew', 'POST', {});
 });

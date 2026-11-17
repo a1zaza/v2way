@@ -13,6 +13,7 @@ import {
   Toggle,
 } from './components.tsx';
 import { formatTime, split, id } from './types.ts';
+import { latestCertificateJob } from './card-state.ts';
 
 type Request = <T>(path: string, method?: string, value?: unknown) => Promise<T>;
 type Provider = {
@@ -101,6 +102,13 @@ export function AcmePanel({
       clearInterval(timer);
     };
   }, [request]);
+  const pending = jobs.filter(
+    (job) =>
+      ['queued', 'running', 'unknown', 'interrupted'].includes(job.status) &&
+      latestCertificateJob(jobs, job.certificateId)?.id === job.id,
+  );
+  const pendingIds = new Set(pending.map((job) => job.id));
+  const history = jobs.filter((job) => !pendingIds.has(job.id));
   return (
     <section className="panel acme-panel">
       <div className="acme-heading">
@@ -127,19 +135,22 @@ export function AcmePanel({
         HTTP-01 需要公网 80 端口访问挑战路径；DNS-01 支持通配符和内网站点，需要有公开 DNS
         的域名及解析权限。
       </div>
-      {jobs.length > 0 && (
+      {[
+        { title: '待处理任务', values: pending, current: true },
+        { title: '任务历史', values: history, current: false },
+      ].map(({ title, values, current }) => (
         <details
           className="acme-jobs"
-          open={showJobs}
-          onToggle={(e) => setShowJobs(e.currentTarget.open)}
+          key={title}
+          open={current ? showJobs : undefined}
+          onToggle={current ? (e) => setShowJobs(e.currentTarget.open) : undefined}
         >
           <summary>
-            签发任务 · {jobs.length} 条 ·{' '}
-            {jobs.filter((j) => ['failed', 'unknown', 'interrupted'].includes(j.status)).length}{' '}
-            条需处理
+            {title} · {values.length} 条
           </summary>
+          {current && values.length === 0 && <p className="muted small">暂无待处理任务</p>}
           <div>
-            {jobs.slice(0, jobLimit).map((j) => (
+            {(current ? values : values.slice(0, jobLimit)).map((j) => (
               <article className="acme-job" key={j.id}>
                 <div>
                   <strong>{j.name}</strong>
@@ -163,10 +174,7 @@ export function AcmePanel({
                 <div className="acme-job-footer">
                   <time>{formatTime(j.updatedAt)}</time>
                   {['failed', 'interrupted', 'unknown'].includes(j.status) &&
-                    !jobs.some(
-                      (other) =>
-                        other.certificateId === j.certificateId && other.createdAt > j.createdAt,
-                    ) && (
+                    latestCertificateJob(jobs, j.certificateId)?.id === j.id && (
                       <button
                         className="secondary"
                         onClick={() => {
@@ -176,7 +184,10 @@ export function AcmePanel({
                             'POST',
                             {},
                           )
-                            .then((job) => setJobs((old) => [job, ...old]))
+                            .then((job) => {
+                              setJobs((old) => [job, ...old]);
+                              setShowJobs(true);
+                            })
                             .catch((e) => setError(e.message));
                         }}
                       >
@@ -188,13 +199,13 @@ export function AcmePanel({
               </article>
             ))}
           </div>
-          {jobs.length > jobLimit && (
+          {!current && values.length > jobLimit && (
             <button className="secondary" onClick={() => setJobLimit((n) => n + 8)}>
-              查看更多任务
+              查看更多历史任务
             </button>
           )}
         </details>
-      )}
+      ))}
       {open && (
         <AcmeModal
           request={request}
