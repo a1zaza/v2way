@@ -30,16 +30,16 @@ Dockerfile 不设置 CMD，Compose 不设置 command。入口脚本在无参数�
 | --- | --- |
 | 自动触发 | push 到 main |
 | 手动触发 | workflow_dispatch，仅 main 进入发布 Job |
-| Job | build-and-push，超时 30 分钟 |
-| Runner | GitHub 托管 ubuntu-24.04 |
-| 权限 | Workflow 默认空权限；发布 Job 为 contents: read、packages: write |
+| Job | build-and-push matrix，单项超时 30 分钟；publish-manifest 合并，超时 10 分钟 |
+| Runner | amd64 使用 ubuntu-24.04；arm64 使用 ubuntu-24.04-arm，均为原生构建 |
+| 权限 | Workflow 默认空权限；构建 Job 为 contents: read、packages: write；合并 Job 仅 packages: write |
 | 认证 | github.actor + secrets.GITHUB_TOKEN，registry 为 ghcr.io |
 | 构建 | 上下文为仓库根目录，Dockerfile 为 deploy/Dockerfile |
-| 架构 / 标签 | linux/amd64，仅 latest |
-| 缓存 | type=gha，scope=v2way-amd64，写入 mode=max |
+| 架构 / 标签 | linux/amd64、linux/arm64，共用 latest 多架构标签 |
+| 缓存 | type=gha，scope=v2way-${arch}，写入 mode=max |
 | 并发 | 按仓库和 ref 分组，取消同分组旧运行；其他分支的手动运行不会取消 main 发布 |
 
-步骤为检出事件 SHA、生成小写镜像路径、初始化 Buildx、登录 GHCR、构建推送并输出摘要。检出关闭 persist-credentials；shell 中通过预定义环境变量或步骤 env 传递值。PR、其他分支、Git tag 和 Release 不发布镜像。
+构建 matrix 分别检出事件 SHA、生成小写镜像路径、初始化 Buildx、登录 GHCR，并按 digest 推送本架构镜像。每个架构将 digest 作为独立 artifact 保存 1 天；合并任务仅在全部构建成功后下载本次运行的 digest，通过 imagetools create 发布同一 latest，并检查 manifest 架构及输出摘要。不使用 QEMU，不发布单架构临时标签。检出关闭 persist-credentials；shell 中通过预定义环境变量或步骤 env 传递值。PR、其他分支、Git tag 和 Release 不发布镜像。
 
 镜像名从小写 `github.repository` 生成，Compose 使用同一仓库对应的固定地址。OCI 标签保存项目名、源码 URL 和事件 SHA，任务摘要输出镜像地址、源码 SHA 和 digest。latest 是可变标签，历史任务重跑前须核对源码版本；更新前记录旧 digest 并保留回退镜像。
 
@@ -51,6 +51,8 @@ Dockerfile 不设置 CMD，Compose 不设置 command。入口脚本在无参数�
 | [docker/setup-buildx-action](https://github.com/docker/setup-buildx-action/releases/tag/v4.4.1) | v4.4.1 | `f87e5991a6d7451dcb8d9637bfbc97413f497069` |
 | [docker/login-action](https://github.com/docker/login-action/releases/tag/v4.7.0) | v4.7.0 | `81c6f93d4bc991e510b342a00b419b3bb4efc5c6` |
 | [docker/build-push-action](https://github.com/docker/build-push-action/releases/tag/v7.4.0) | v7.4.0 | `c3c9e263c25d99ce0380d002d59b67737d91b0dc` |
+| [actions/upload-artifact](https://github.com/actions/upload-artifact/releases/tag/v7.0.2) | v7.0.2 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` |
+| [actions/download-artifact](https://github.com/actions/download-artifact/releases/tag/v8.0.2) | v8.0.2 | `9000827ccba6bdab643e8b6fd33ac0654aef8333` |
 
 上述版本的 Action 元数据及所用输入已按固定提交核对。发布认证与缓存方式参考 [GitHub 镜像发布](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images) 和 [Docker GitHub Actions 缓存](https://docs.docker.com/build/ci/github-actions/cache/)。现有 Go、前端测试继续在开发流程执行，本工作流不增加独立测试 Job。
 
@@ -74,8 +76,8 @@ host 网络的回环地址可访问宿主服务；其他容器服务名不会自
 
 ## 6. 验证范围
 
-配置验收包括 Workflow YAML 和输入、权限、事件及分支、单架构单标签、Action 固定引用、镜像名小写、shell 语法、默认参数与透传、Compose host/无 ports 和目录挂载。只做配置检查不需要构建镜像或启动容器。
+配置验收包括 Workflow YAML 和输入、权限、事件及分支、双架构单标签、Action 固定引用、镜像名小写、shell 语法、默认参数与透传、Compose host/无 ports 和目录挂载。只做配置检查不需要构建镜像或启动容器。
 
-真实发布还需验证：GitHub Job 成功、镜像推送成功、源码关联与 digest、amd64 架构、完整控制台内嵌、Public 可见性与匿名拉取。真实部署另行验证宿主监听、已有数据加载、登录和站点代理、重建后数据保留以及长连接/ACME 停机。
+真实发布还需验证：GitHub Job 成功、镜像推送成功、源码关联与 digest、manifest 同时包含 amd64/arm64、两种架构的完整控制台内嵌、Public 可见性与匿名拉取。真实部署另行验证宿主监听、已有数据加载、登录和站点代理、重建后数据保留以及长连接/ACME 停机。
 
 本地通过的检查结果记录在迁移设计的实施记录中。本轮未运行 Docker build、启动容器、创建真实账号、触发远程 Workflow 或改变远程包设置。

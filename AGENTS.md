@@ -50,7 +50,7 @@
 - Compose 使用 host 网络与简写挂载 `./data:/var/lib/v2way`，部署者先准备数据目录；不设置 ports，管理 HTTP 默认直接绑定宿主回环 `127.0.0.1:4033`。
 - 启动不配置管理 HTTPS 证书或 HTTPS 环境变量，TLS 通过业务站点代理终止。镜像预建 `/www`，宿主静态目录可另加只读挂载；业务端口按实际站点配置直接监听宿主网络；发布新端口无需追加映射，部署者核对宿主端口占用和防火墙。
 - 配置检查可用 `docker compose --env-file /dev/null config --quiet`，无需构建或启动容器。
-- `.github/workflows/publish-image.yml` 在 main 推送或 main 手动运行时构建 amd64 镜像，使用 GITHUB_TOKEN 发布 `ghcr.io/a1zaza/v2way:latest`；只发布 latest，包必须设为 Public 并验证匿名拉取。Action 固定完整 commit SHA，使用 GitHub Actions 缓存，不自动部署。
+- `.github/workflows/publish-image.yml` 在 main 推送或 main 手动运行时通过 matrix 在 ubuntu-24.04 / ubuntu-24.04-arm 原生构建 amd64/arm64 镜像（构建超时 30 分钟，按架构隔离缓存 scope），按 digest 推送并通过 artifact 传给合并任务；全部构建成功后合并 latest（超时 10 分钟），不使用 QEMU，使用 GITHUB_TOKEN 发布 `ghcr.io/a1zaza/v2way:latest`；只发布 latest，包必须设为 Public 并验证匿名拉取。Action 固定完整 commit SHA，使用 GitHub Actions 缓存，不自动部署。
 - 配置落地、本机测试、模拟端口映射不等于真实镜像、CI、Docker 网络或公网签发验收，报告结论时明确验证范围。详情见 [Docker 与 CI/CD](docs/docker-cicd-design.md)。
 
 # 测试账号

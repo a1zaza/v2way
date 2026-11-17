@@ -17,7 +17,7 @@ v2way 使用 Go 和 React/TypeScript，控制台内嵌在单个可执行程序�
 
 ## 快速部署
 
-推荐使用 Linux Docker Engine 和 Docker Compose。镜像发布至公开 GHCR，使用 `linux/amd64` 架构和 `latest` 标签。
+推荐使用 Linux Docker Engine 和 Docker Compose。镜像发布至公开 GHCR，支持 `linux/amd64`、`linux/arm64`，统一使用 `latest` 标签，拉取时自动匹配宿主架构。
 
 ### 1. 准备配置与数据目录
 
