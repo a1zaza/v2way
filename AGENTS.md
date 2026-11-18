@@ -78,6 +78,7 @@
 - 深灰背景、蓝色强调、紧凑布局；字体统一 `Consolas, 'LXGW WenKai', monospace`，表单和代码文本继承字体。本地资源位于 `web/src/assets/fonts/`，使用 `@font-face` 与 `font-display: swap`，不依赖系统字体安装。
 - 主体最大宽度 1600px（`--content-max-width`），主体滚动区通过响应式水平内边距居中；对象卡片 `auto-fill`，最小列宽 340px、窄屏 100%、单卡最大宽度 520px，不固定每行两列或三列。
 - 侧边栏菜单左侧高亮为直角。文字操作使用带背景/边框的 secondary 标准按钮，不使用 text-button；纯图标用 icon-button，外部文档链接保留链接语义。
+- 数值表单统一使用 `web/src/integer-input.tsx` 的 `IntegerInput`（原生 `type="text"` + numeric 键盘），保留空值编辑、ASCII 整数和字段范围校验，不使用 `type="number"`；非法文本不转为 NaN，提交前按原生表单有效性拦截。
 - 下拉统一 `web/src/select.tsx` 的 `Select`/`SelectOption`，不使用原生 select 或 alert/confirm/prompt；确认与错误复用 Modal/FormError。保留键盘、视口定位、必选及 fieldset 禁用，弹窗 Escape 先关闭下拉。
 - JSON 导入由自定义按钮触发隐藏文件输入，读取期间锁定表单，同文件可重选；系统文件选择窗口仍由浏览器提供。
 
@@ -113,7 +114,9 @@
 
 ## 监听、维护与静态目录
 
-- HTTP/HTTPS 业务端口不预设，由站点 `httpPort`/`httpsPort` 决定，默认绑定 `0.0.0.0`，`-listen-host` 可限制 IP。无启用站点不开放业务端口；同协议多站点共享端口，按实际监听端口和域名匹配。
+- 新建站点表单默认 HTTP 80、HTTPS 443，默认开启 HTTPS，仍须选择有效证书后保存；已有站点保留原端口和协议。关闭 HTTPS 后重新开启且无端口时使用 443；HTTP 留空关闭。
+- 站点请求体上限可配置为 1–2048 MiB，默认 20 MiB，前后端范围保持一致；代理按流式读取限制，不预分配上限大小的内存。
+- HTTP/HTTPS 业务端口不设全局默认，由站点 `httpPort`/`httpsPort` 决定，默认绑定 `0.0.0.0`，`-listen-host` 可限制 IP。无启用站点不开放业务端口；同协议多站点共享端口，按实际监听端口和域名匹配。
 - 同域名可用于不同端口；同端口不能混用 HTTP/HTTPS，切换协议先发布移除该端口，再发布新协议。发布先预占新增端口，失败保留运行配置；移除端口停止接受新连接，已有流式/WebSocket 保持。
 - HTTPS 默认等效 `ssl_reject_handshake on`：空/未知/停用/仅 HTTP/跨端口 SNI、无有效匹配证书均拒绝握手，不提供兜底证书或关闭保护的选项。详见 [站点监听](docs/site-listeners.md)。
 - 管理入口只提供 HTTP，HTTPS 由站点代理终止。Host 限于绑定地址、通配监听下 IP/localhost、已发布启用域名或显式来源；其他代理域名用 `-origin` 声明实际浏览器来源。保留精确 Origin/CSRF 校验，不依赖转发协议头；验证通过的 HTTPS 登录设置 Secure Cookie。

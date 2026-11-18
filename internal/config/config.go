@@ -299,8 +299,8 @@ func Validate(c Config) []Issue {
 		if s.RedirectHTTPS && !s.HTTPS {
 			add(f+".redirectHttps", "强制 HTTPS 需要先启用 HTTPS")
 		}
-		if s.MaxBodyMiB < 1 || s.MaxBodyMiB > 1024 {
-			add(f+".maxBodyMiB", "请求体上限范围为 1–1024 MiB")
+		if s.MaxBodyMiB < 1 || s.MaxBodyMiB > 2048 {
+			add(f+".maxBodyMiB", "请求体上限范围为 1–2048 MiB")
 		}
 		if s.RatePerSecond < 0 || s.RatePerSecond > 100000 {
 			add(f+".ratePerSecond", "每秒请求限制范围为 0–100000，0 表示不限")

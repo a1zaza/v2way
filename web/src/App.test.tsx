@@ -152,7 +152,9 @@ async function addSite() {
   const dialog = screen.getByRole('dialog');
   await user.type(within(dialog).getByLabelText('站点名称'), '我的站点');
   await user.type(within(dialog).getByRole('textbox', { name: /^域名/ }), 'app.example.com');
-  await user.type(within(dialog).getByRole('spinbutton', { name: /^HTTP 端口/ }), '18080');
+  await user.clear(within(dialog).getByRole('textbox', { name: /^HTTP 端口/ }));
+  await user.type(within(dialog).getByRole('textbox', { name: /^HTTP 端口/ }), '18080');
+  await user.click(within(dialog).getByRole('switch', { name: /启用 HTTPS/ }));
   await user.click(within(dialog).getByRole('button', { name: '保留编辑' }));
   return user;
 }
@@ -418,6 +420,8 @@ it('关闭与恢复站点仅编辑维护状态，保存后保留路由及端口�
     ...newSite(),
     id: 'demo',
     name: '维护测试',
+    https: false,
+    httpsPort: 0,
     domains: ['app.example.com'],
     httpPort: 18080,
     routes: [{ ...newRoute(), id: 'demo-route', name: '原路由' }],
@@ -468,6 +472,8 @@ it('站点管理会话 Cookie 默认剔除，开关保存后可重新关闭', as
     ...newSite(),
     id: 'cookie-site',
     name: '会话转发测试',
+    https: false,
+    httpsPort: 0,
     domains: ['app.example.com'],
     httpPort: 18080,
   };
@@ -555,7 +561,7 @@ describe('控制台工作流', () => {
   });
 });
 
-it('新站点不预填业务端口，HTTPS 端口由用户填写', async () => {
+it('新站点默认 HTTP 80、HTTPS 443 并启用 HTTPS，文本端口可清空与修改', async () => {
   backend();
   const user = userEvent.setup();
   render(<App />);
@@ -565,24 +571,33 @@ it('新站点不预填业务端口，HTTPS 端口由用户填写', async () => {
   );
   await user.click(screen.getByRole('button', { name: '新建站点' }));
   const modal = within(screen.getByRole('dialog'));
-  expect((modal.getByRole('spinbutton', { name: /^HTTP 端口/ }) as HTMLInputElement).value).toBe(
-    '',
-  );
-  await user.click(modal.getByRole('switch', { name: /启用 HTTPS/ }));
-  expect((modal.getByRole('spinbutton', { name: /^HTTPS 端口/ }) as HTMLInputElement).value).toBe(
-    '',
-  );
-  expect((modal.getByRole('switch', { name: /HTTP 自动跳转/ }) as HTMLInputElement).disabled).toBe(
+  const http = modal.getByRole('textbox', { name: /^HTTP 端口/ }) as HTMLInputElement;
+  const https = modal.getByRole('textbox', { name: /^HTTPS 端口/ }) as HTMLInputElement;
+  expect(http.value).toBe('80');
+  expect(https.value).toBe('443');
+  expect((modal.getByRole('switch', { name: /启用 HTTPS/ }) as HTMLInputElement).checked).toBe(
     true,
   );
   expect(modal.getByText(/未知域名和未提供 SNI/)).toBeTruthy();
-  await user.type(modal.getByRole('spinbutton', { name: /^HTTPS 端口/ }), '18443');
-  await user.type(modal.getByRole('spinbutton', { name: /^HTTP 端口/ }), '18080');
+  expect(modal.queryByRole('spinbutton')).toBeNull();
+  await user.clear(http);
+  expect(http.value).toBe('');
+  expect((modal.getByRole('switch', { name: /HTTP 自动跳转/ }) as HTMLInputElement).disabled).toBe(
+    true,
+  );
+  await user.type(http, '18080');
+  await user.clear(https);
+  await user.type(https, '18443');
+  expect(https.value).toBe('18443');
   expect((modal.getByRole('switch', { name: /HTTP 自动跳转/ }) as HTMLInputElement).disabled).toBe(
     false,
   );
   await user.click(modal.getByRole('switch', { name: /启用 HTTPS/ }));
-  expect(modal.queryByRole('spinbutton', { name: /^HTTPS 端口/ })).toBeNull();
+  expect(modal.queryByRole('textbox', { name: /^HTTPS 端口/ })).toBeNull();
+  await user.click(modal.getByRole('switch', { name: /启用 HTTPS/ }));
+  expect((modal.getByRole('textbox', { name: /^HTTPS 端口/ }) as HTMLInputElement).value).toBe(
+    '443',
+  );
 });
 it('实例信息展示实际共享监听，不展示预设业务地址', async () => {
   backend({

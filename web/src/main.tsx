@@ -80,6 +80,7 @@ import {
   type Upstream,
   type Version,
 } from './types.ts';
+import { IntegerInput } from './integer-input.tsx';
 import './style.css';
 
 const logoURL = new URL('./assets/brand/logo.svg', import.meta.url).href;
@@ -1932,11 +1933,9 @@ function EditorModal({
                     : undefined
                 }
               >
-                <input
-                  type="number"
+                <IntegerInput
                   min={1}
                   max={65535}
-                  step={1}
                   value={site.httpPort || ''}
                   placeholder="填写监听端口"
                   onChange={(e) =>
@@ -1956,7 +1955,7 @@ function EditorModal({
                   setSite({
                     ...site,
                     https,
-                    httpsPort: https ? site.httpsPort : 0,
+                    httpsPort: https ? site.httpsPort || 443 : 0,
                     redirectHttps: https && site.redirectHttps,
                   })
                 }
@@ -1967,11 +1966,9 @@ function EditorModal({
                     label="HTTPS 端口"
                     hint="同一端口只使用一种协议；未知域名和未提供 SNI 的 TLS 握手默认拒绝。"
                   >
-                    <input
-                      type="number"
+                    <IntegerInput
                       min={1}
                       max={65535}
-                      step={1}
                       required
                       value={site.httpsPort || ''}
                       placeholder="填写监听端口"
@@ -2030,18 +2027,16 @@ function EditorModal({
                 />
                 <div className="form-grid">
                   <Field label="请求体上限（MiB）">
-                    <input
-                      type="number"
+                    <IntegerInput
                       min={1}
-                      max={1024}
+                      max={2048}
                       required
                       value={site.maxBodyMiB}
                       onChange={(e) => setSite({ ...site, maxBodyMiB: Number(e.target.value) })}
                     />
                   </Field>
                   <Field label="每秒请求限制" hint="0 表示不限；按站点共享配额。">
-                    <input
-                      type="number"
+                    <IntegerInput
                       min={0}
                       max={100000}
                       required
@@ -2104,8 +2099,7 @@ function EditorModal({
                     />
                   </Field>
                   <Field label="权重">
-                    <input
-                      type="number"
+                    <IntegerInput
                       required
                       min={1}
                       max={100}
@@ -2323,8 +2317,7 @@ function EditorModal({
               {route.action === 'response' && (
                 <>
                   <Field label="响应状态码">
-                    <input
-                      type="number"
+                    <IntegerInput
                       required
                       min={200}
                       max={599}
@@ -2387,11 +2380,9 @@ function EditorModal({
                   label="处理超时（秒）"
                   hint="0 使用默认 60 秒，覆盖请求处理到响应正文结束；WebSocket 自动免除总时长限制。"
                 >
-                  <input
-                    type="number"
+                  <IntegerInput
                     min={0}
                     max={86400}
-                    step={1}
                     required
                     value={route.timeoutSeconds}
                     onChange={(e) => setRoute({ ...route, timeoutSeconds: Number(e.target.value) })}
@@ -2405,11 +2396,9 @@ function EditorModal({
                       label="后端连接超时（秒）"
                       hint="0 使用默认 5 秒，包含 DNS 查询与 TCP 连接。"
                     >
-                      <input
-                        type="number"
+                      <IntegerInput
                         min={0}
                         max={86400}
-                        step={1}
                         required
                         value={route.connectTimeoutSeconds ?? 0}
                         onChange={(e) =>
@@ -2418,11 +2407,9 @@ function EditorModal({
                       />
                     </Field>
                     <Field label="TLS 握手超时（秒）" hint="0 使用默认 5 秒，仅对 HTTPS 后端生效。">
-                      <input
-                        type="number"
+                      <IntegerInput
                         min={0}
                         max={86400}
-                        step={1}
                         required
                         value={route.tlsHandshakeTimeoutSeconds ?? 0}
                         onChange={(e) =>
@@ -2435,11 +2422,9 @@ function EditorModal({
                     label="响应头等待超时（秒）"
                     hint="0 使用默认 30 秒，从请求发送完毕到收到响应头，不限制响应正文的传输时长。"
                   >
-                    <input
-                      type="number"
+                    <IntegerInput
                       min={0}
                       max={86400}
-                      step={1}
                       required
                       value={route.responseHeaderTimeoutSeconds ?? 0}
                       onChange={(e) =>
@@ -2917,11 +2902,9 @@ function RouteTest({
               </Select>
             </Field>
             <Field label="监听端口">
-              <input
-                type="number"
+              <IntegerInput
                 min={1}
                 max={65535}
-                step={1}
                 required
                 value={port}
                 onChange={(e) => setPort(e.target.value)}
