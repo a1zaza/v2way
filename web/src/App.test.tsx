@@ -327,7 +327,7 @@ it('Header 变量默认关闭，校验失败保留编辑，保存模板并在发
   await waitFor(() => expect(mock.draft().config.sites[0].routes[0].headerVariables).toBe(true));
   expect(mock.draft().config.sites[0].routes[0].requestHeaders?.['X-IP']).toBe('${remote_addr}');
   await user.click(screen.getByRole('button', { name: '预览并发布' }));
-  const preview = await screen.findByRole('region', { name: '路由 Header 变更' });
+  const preview = await screen.findByRole('region', { name: '路由响应与 Header 变更' });
   expect(within(preview).getByText('Header 变量')).toBeTruthy();
   expect(within(preview).queryByText('请求头模板')).toBeNull();
   expect(within(preview).getByText('响应头模板')).toBeTruthy();
@@ -1058,4 +1058,74 @@ it('访问日志可按来源 IP 搜索并在详情查看，旧记录显示未记
   await user.click(screen.getByRole('button', { name: /详情/ }));
   expect(within(screen.getByRole('dialog')).getByText('2001:db8::1234')).toBeTruthy();
   expect(within(screen.getByRole('dialog')).getByText('来源 IP')).toBeTruthy();
+});
+
+it('固定响应支持正文变量、错误保留、复制与发布预览，切换动作清除开关', async () => {
+  const route = {
+    ...newRoute(),
+    id: 'response',
+    name: '直接响应',
+    action: 'response' as const,
+    body: '固定 ${unknown}',
+  };
+  const site = {
+    ...newSite(),
+    id: 'site',
+    name: '响应站点',
+    domains: ['app.example.com'],
+    httpPort: 18080,
+    routes: [route],
+  };
+  const initialConfig = { sites: [site], upstreams: [] };
+  const mock = backend({
+    initialConfig,
+    initialVersions: [
+      {
+        id: 1,
+        config: initialConfig,
+        createdAt: '2026-11-18T00:00:00Z',
+        note: '',
+        requestId: 'initial',
+      },
+    ],
+  });
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole('heading', { name: '网关运行概览' });
+  await user.click(
+    within(screen.getByRole('navigation')).getByRole('button', { name: /路由规则/ }),
+  );
+  await user.click(screen.getByRole('button', { name: '编辑规则' }));
+  const toggle = screen.getByRole('switch', { name: /^启用正文变量/ });
+  expect((toggle as HTMLInputElement).checked).toBe(false);
+  await user.click(toggle);
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '保留编辑' }));
+  expect(screen.getByRole('alert').textContent).toContain('响应正文');
+  expect((screen.getByLabelText('纯文本响应内容') as HTMLTextAreaElement).value).toBe(
+    '固定 ${unknown}',
+  );
+  await user.click(screen.getByText('可用变量与复制'));
+  const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+  await user.click(screen.getByRole('button', { name: '复制变量 remote_addr' }));
+  expect(copy).toHaveBeenCalledWith('${remote_addr}');
+  fireEvent.change(screen.getByLabelText('纯文本响应内容'), {
+    target: { value: '来源=${remote_addr}\n路径=${uri}' },
+  });
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '保留编辑' }));
+  await user.click(screen.getByRole('button', { name: '保存草稿' }));
+  await waitFor(() => expect(mock.draft().config.sites[0].routes[0].bodyVariables).toBe(true));
+  await user.click(screen.getByRole('button', { name: '预览并发布' }));
+  const preview = await screen.findByRole('region', { name: '路由响应与 Header 变更' });
+  expect(within(preview).getByText('正文变量')).toBeTruthy();
+  expect(within(preview).getByLabelText('响应站点 / 直接响应 响应正文 之后').textContent).toContain(
+    '${remote_addr}',
+  );
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '关闭弹窗' }));
+  await user.click(screen.getByRole('button', { name: '编辑规则' }));
+  await user.click(screen.getByLabelText('动作类型'));
+  await user.click(screen.getByRole('option', { name: '重定向' }));
+  fireEvent.change(screen.getByLabelText('跳转目标'), { target: { value: '/next' } });
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '保留编辑' }));
+  await user.click(screen.getByRole('button', { name: '保存草稿' }));
+  await waitFor(() => expect(mock.draft().config.sites[0].routes[0].bodyVariables).toBeUndefined());
 });

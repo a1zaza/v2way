@@ -17,17 +17,28 @@ export function validateHeaderVariables(headers: Record<string, string>, label: 
   for (const [key, value] of Object.entries(headers)) {
     if (seen.has(key.toLowerCase())) throw new Error(`${label} ${key} 大小写重复。`);
     seen.add(key.toLowerCase());
-    if (new TextEncoder().encode(value).length > 8192 || /[\x00-\x08\x0a-\x1f\x7f]/.test(value))
-      throw new Error(`${label} ${key} 含非法字符或超过 8192 字节。`);
-    for (let i = 0; i < value.length;) {
-      if (value.startsWith('$$', i)) i += 2;
-      else if (value.startsWith('${', i)) {
-        const end = value.indexOf('}', i + 2);
-        if (end < 0) throw new Error(`${label} ${key} 的变量缺少结束括号。`);
-        if (!names.has(value.slice(i + 2, end)))
-          throw new Error(`${label} ${key} 的变量为空或不受支持，请使用变量列表中的名称。`);
-        i = end + 1;
-      } else i++;
-    }
+    validateTemplate(value, `${label} ${key}`, 8192, false);
+  }
+}
+
+export function validateBodyVariables(value: string) {
+  validateTemplate(value, '响应正文', 65536, true);
+}
+
+function validateTemplate(value: string, label: string, limit: number, multiline: boolean) {
+  if (
+    new TextEncoder().encode(value).length > limit ||
+    (!multiline && /[\x00-\x08\x0a-\x1f\x7f]/.test(value))
+  )
+    throw new Error(`${label} 含非法字符或超过 ${limit} 字节。`);
+  for (let i = 0; i < value.length;) {
+    if (value.startsWith('$$', i)) i += 2;
+    else if (value.startsWith('${', i)) {
+      const end = value.indexOf('}', i + 2);
+      if (end < 0) throw new Error(`${label} 的变量缺少结束括号。`);
+      if (!names.has(value.slice(i + 2, end)))
+        throw new Error(`${label} 的变量为空或不受支持，请使用变量列表中的名称。`);
+      i = end + 1;
+    } else i++;
   }
 }

@@ -60,6 +60,7 @@ type Route struct {
 	SPA                          bool              `json:"spa"`
 	Status                       int               `json:"status"`
 	Body                         string            `json:"body,omitempty"`
+	BodyVariables                bool              `json:"bodyVariables,omitempty"`
 	Location                     string            `json:"location,omitempty"`
 	TimeoutSeconds               int               `json:"timeoutSeconds"`
 	ConnectTimeoutSeconds        int               `json:"connectTimeoutSeconds,omitempty"`
@@ -367,6 +368,13 @@ func Validate(c Config) []Issue {
 			}
 			if r.HeaderVariables && r.Action != "proxy" {
 				add(rf+".headerVariables", "Header 变量仅支持反向代理路由")
+			}
+			if r.BodyVariables {
+				if r.Action != "response" {
+					add(rf+".bodyVariables", "正文变量仅支持固定响应路由")
+				} else if _, err := headertemplate.CompileBody(r.Body); err != nil {
+					add(rf+".body", fmt.Sprintf("站点「%s」路由「%s」（%s）：%s", s.Name, r.Name, r.ID, err))
+				}
 			}
 			for index, headers := range []map[string]string{r.RequestHeaders, r.ResponseHeaders} {
 				if r.HeaderVariables {

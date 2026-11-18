@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { headerVariables, validateHeaderVariables } from './header-variables.ts';
+import {
+  headerVariables,
+  validateHeaderVariables,
+  validateBodyVariables,
+} from './header-variables.ts';
 
 describe('Header 模板校验', () => {
   it('支持全部变量、固定文本、美元转义和不展开的普通美元文本', () => {
@@ -31,4 +35,16 @@ describe('Header 模板校验', () => {
     );
     expect(() => validateHeaderVariables({ 'X-Key': 'a'.repeat(8192) }, '请求头')).not.toThrow();
   });
+});
+
+it('正文模板复用全部变量并允许换行，保留独立的 64 KiB 限制', () => {
+  expect(() =>
+    validateBodyVariables(headerVariables.map(([name]) => `\${${name}}`).join('\r\n')),
+  ).not.toThrow();
+  expect(() => validateBodyVariables('$${unknown}\n$$')).not.toThrow();
+  expect(() => validateBodyVariables('x'.repeat(65536))).not.toThrow();
+  expect(() => validateBodyVariables('x'.repeat(65537))).toThrow(/65536/);
+  expect(() => validateBodyVariables('中'.repeat(21846))).toThrow(/65536/);
+  for (const value of ['${unknown}', '${}', '${remote_addr'])
+    expect(() => validateBodyVariables(value)).toThrow(/响应正文/);
 });

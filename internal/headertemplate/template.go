@@ -1,4 +1,4 @@
-// Package headertemplate compiles opt-in HTTP header value templates.
+// Package headertemplate compiles opt-in request variable templates for headers and response bodies.
 package headertemplate
 
 import (
@@ -10,13 +10,17 @@ import (
 )
 
 const MaxBytes = 8192
+const MaxBodyBytes = 64 << 10
 
 var names = [...]string{"remote_addr", "remote_port", "scheme", "host", "http_host", "request_method", "uri", "request_id", "site_id", "route_id"}
 
 func Names() []string { return append([]string(nil), names[:]...) }
 
 type part struct{ text, variable string }
-type Template struct{ parts []part }
+type Template struct {
+	parts []part
+	body  bool
+}
 type Headers map[string]Template
 type Context map[string]string
 
@@ -33,9 +37,25 @@ func validValue(value string) bool {
 }
 
 func Compile(value string) (Template, error) {
-	var t Template
 	if !validValue(value) {
-		return t, errors.New("Header 值含非法字符或超过 8192 字节")
+		return Template{}, errors.New("Header 值含非法字符或超过 8192 字节")
+	}
+	return compile(value, false)
+}
+
+// CompileBody allows multiline text while retaining the fixed variable registry.
+func CompileBody(value string) (Template, error) {
+	if len(value) > MaxBodyBytes {
+		return Template{}, errors.New("响应正文模板超过 65536 字节")
+	}
+	return compile(value, true)
+}
+
+func compile(value string, body bool) (Template, error) {
+	t := Template{body: body}
+	label := "Header"
+	if body {
+		label = "响应正文"
 	}
 	var literal strings.Builder
 	flush := func() {
@@ -51,7 +71,7 @@ func Compile(value string) (Template, error) {
 		} else if strings.HasPrefix(value[i:], "${") {
 			end := strings.IndexByte(value[i+2:], '}')
 			if end < 0 {
-				return Template{}, errors.New("Header 变量缺少结束括号")
+				return Template{}, fmt.Errorf("%s 变量缺少结束括号", label)
 			}
 			name := value[i+2 : i+2+end]
 			known := false
@@ -60,7 +80,7 @@ func Compile(value string) (Template, error) {
 			}
 			if !known {
 				// Never echo an arbitrary substring of a potentially secret value.
-				return Template{}, errors.New("Header 变量为空或不受支持，请使用变量列表中的名称")
+				return Template{}, fmt.Errorf("%s 变量为空或不受支持，请使用变量列表中的名称", label)
 			}
 			flush()
 			t.parts = append(t.parts, part{variable: name})
@@ -75,17 +95,21 @@ func Compile(value string) (Template, error) {
 }
 
 func (t Template) Expand(context Context) (string, error) {
+	label, limit := "Header", MaxBytes
+	if t.body {
+		label, limit = "响应正文", MaxBodyBytes
+	}
 	var result strings.Builder
 	for _, p := range t.parts {
 		value := p.text
 		if p.variable != "" {
 			value = context[p.variable]
 			if value == "" {
-				return "", fmt.Errorf("Header 变量 %s 不可用", p.variable)
+				return "", fmt.Errorf("%s 变量 %s 不可用", label, p.variable)
 			}
 		}
-		if result.Len()+len(value) > MaxBytes || !validValue(value) {
-			return "", errors.New("Header 展开结果含非法字符或超过 8192 字节")
+		if result.Len()+len(value) > limit || !t.body && !validValue(value) {
+			return "", fmt.Errorf("%s 展开结果含非法字符或超过 %d 字节", label, limit)
 		}
 		result.WriteString(value)
 	}

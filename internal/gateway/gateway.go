@@ -76,6 +76,7 @@ type pool struct {
 type site struct {
 	config.Site
 	headerTemplates map[string]routeHeaderTemplates
+	bodyTemplates   map[string]headertemplate.Template
 	routes          []config.Route
 	cert            *tls.Certificate
 	mu              sync.Mutex
@@ -162,12 +163,20 @@ func (e *Engine) Compile(c config.Config) (*Snapshot, error) {
 	for _, v := range c.Sites {
 		item := &site{Site: v, routes: append([]config.Route{}, v.Routes...), tokens: float64(v.RatePerSecond), last: time.Now()}
 		item.headerTemplates = map[string]routeHeaderTemplates{}
+		item.bodyTemplates = map[string]headertemplate.Template{}
 		item.Domains = append([]string{}, v.Domains...)
 		for i, d := range item.Domains {
 			item.Domains[i], _ = config.Domain(d)
 		}
 		config.SortRoutes(item.routes)
 		for _, r := range item.routes {
+			if r.BodyVariables {
+				template, err := headertemplate.CompileBody(r.Body)
+				if err != nil {
+					return fail(err)
+				}
+				item.bodyTemplates[r.ID] = template
+			}
 			if r.HeaderVariables {
 				request, err := headertemplate.CompileHeaders(r.RequestHeaders)
 				if err != nil {
@@ -513,9 +522,20 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch route.Action {
 	case "response":
+		body := route.Body
+		if route.BodyVariables {
+			var err error
+			body, err = s.bodyTemplates[route.ID].Expand(headerContext(r, entry.ID, s.ID, route.ID))
+			if err != nil {
+				http.Error(w, "请求信息无法用于正文变量", http.StatusBadRequest)
+				return
+			}
+		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(route.Status)
-		io.WriteString(w, route.Body)
+		if r.Method != http.MethodHead && route.Status != http.StatusNoContent && route.Status != http.StatusNotModified {
+			io.WriteString(w, body)
+		}
 	case "redirect":
 		http.Redirect(w, r, route.Location, route.Status)
 	case "static":

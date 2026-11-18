@@ -12,6 +12,7 @@ export type Route = {
   spa: boolean;
   status: number;
   body?: string;
+  bodyVariables?: boolean;
   location?: string;
   timeoutSeconds: number;
   connectTimeoutSeconds?: number;

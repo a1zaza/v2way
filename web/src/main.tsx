@@ -47,7 +47,11 @@ import {
 import { AcmePanel, type AcmeJob } from './acme-panel.tsx';
 import { SiteCards, UpstreamCards, CertificateCards } from './object-cards.tsx';
 import { mergeCertificateJobs } from './card-state.ts';
-import { headerVariables, validateHeaderVariables } from './header-variables.ts';
+import {
+  headerVariables,
+  validateHeaderVariables,
+  validateBodyVariables,
+} from './header-variables.ts';
 import { ConfigImport } from './config-import.tsx';
 import { AccessControlPanel } from './access-control-panel.tsx';
 import { SiteAccessAccount } from './site-access-account.tsx';
@@ -131,6 +135,25 @@ async function api<T>(
     );
   return data as T;
 }
+
+function VariableReference() {
+  return (
+    <details className="advanced">
+      <summary>可用变量与复制</summary>
+      <dl className="header-variable-list">
+        {headerVariables.map(([name, description]) => (
+          <div key={name}>
+            <dt>
+              <CopyText value={`\${${name}}`} label={`变量 ${name}`} />
+            </dt>
+            <dd>{description}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  );
+}
+
 function Login({ onLogin }: { onLogin: (s: Session) => void }) {
   const [username, setUsername] = useState(''),
     [password, setPassword] = useState(''),
@@ -1807,6 +1830,8 @@ function EditorModal({
           validateHeaderVariables(req as Record<string, string>, '请求头');
           validateHeaderVariables(resp as Record<string, string>, '响应头');
         }
+        if (route.action === 'response' && route.bodyVariables)
+          validateBodyVariables(route.body ?? '');
         onSave({
           siteId,
           route: {
@@ -1814,6 +1839,8 @@ function EditorModal({
             upstreamId: route.action === 'proxy' ? route.upstreamId : undefined,
             headerVariables:
               route.action === 'proxy' ? route.headerVariables || undefined : undefined,
+            bodyVariables:
+              route.action === 'response' ? route.bodyVariables || undefined : undefined,
             root: route.action === 'static' ? route.root : undefined,
             location: route.action === 'redirect' ? route.location : undefined,
             methods:
@@ -2209,6 +2236,7 @@ function EditorModal({
                       ...route,
                       action: value as Route['action'],
                       headerVariables: value === 'proxy' ? route.headerVariables : undefined,
+                      bodyVariables: value === 'response' ? route.bodyVariables : undefined,
                       status: value === 'redirect' ? 302 : 200,
                       ...(value === 'access_login'
                         ? {
@@ -2304,7 +2332,22 @@ function EditorModal({
                       onChange={(e) => setRoute({ ...route, status: Number(e.target.value) })}
                     />
                   </Field>
-                  <Field label="纯文本响应内容">
+                  <Toggle
+                    label="启用正文变量"
+                    checked={!!route.bodyVariables}
+                    description="开启后展开与 Header 相同的请求变量；关闭时原样返回固定字符串。"
+                    onChange={(enabled) =>
+                      setRoute({ ...route, bodyVariables: enabled || undefined })
+                    }
+                  />
+                  <Field
+                    label="纯文本响应内容"
+                    hint={
+                      route.bodyVariables
+                        ? '支持多行文本与 ${remote_addr} 等变量混排；$$ 表示字面量 $。模板和展开结果最多 64 KiB。'
+                        : '直接返回填写的字符串，不解析变量。'
+                    }
+                  >
                     <textarea
                       rows={4}
                       value={route.body ?? ''}
@@ -2313,6 +2356,7 @@ function EditorModal({
                   </Field>
                 </>
               )}
+              {route.action === 'response' && route.bodyVariables && <VariableReference />}
               {route.action === 'redirect' && (
                 <>
                   <Field label="跳转目标">
@@ -2431,19 +2475,7 @@ function EditorModal({
                               '使用 ${remote_addr} 等变量，可与固定文本拼接；$$ 表示字面量 $，$${remote_addr} 保留原文。保留字段仍由网关管理。'
                             }
                           </p>
-                          <details className="advanced">
-                            <summary>可用变量与复制</summary>
-                            <dl className="header-variable-list">
-                              {headerVariables.map(([name, description]) => (
-                                <div key={name}>
-                                  <dt>
-                                    <CopyText value={`\${${name}}`} label={`变量 ${name}`} />
-                                  </dt>
-                                  <dd>{description}</dd>
-                                </div>
-                              ))}
-                            </dl>
-                          </details>
+                          <VariableReference />
                         </>
                       )}
                     </>
@@ -2519,6 +2551,8 @@ function PublishModal({
         const old = before.find((r) => r.id === route.id);
         const next = after.find((r) => r.id === route.id);
         const fields = [
+          { label: '正文变量', before: !!old?.bodyVariables, after: !!next?.bodyVariables },
+          { label: '响应正文', before: old?.body ?? '', after: next?.body ?? '' },
           { label: 'Header 变量', before: !!old?.headerVariables, after: !!next?.headerVariables },
           {
             label: '请求头模板',
@@ -2623,8 +2657,8 @@ function PublishModal({
               ))}
           </section>
           {headerChanges.length > 0 && (
-            <section className="publish-impact" aria-label="路由 Header 变更">
-              <h3>路由 Header 变更</h3>
+            <section className="publish-impact" aria-label="路由响应与 Header 变更">
+              <h3>路由响应与 Header 变更</h3>
               {headerChanges.map((change) => (
                 <div className="publish-site-impact" key={change.id}>
                   <h4>{change.name}</h4>
@@ -2646,7 +2680,9 @@ function PublishModal({
                               className="header-template-preview"
                               aria-label={`${change.name} ${field.label} 之前`}
                             >
-                              {JSON.stringify(field.before, null, 2)}
+                              {typeof field.before === 'string'
+                                ? field.before
+                                : JSON.stringify(field.before, null, 2)}
                             </pre>
                           )}
                         </dd>
@@ -2664,7 +2700,9 @@ function PublishModal({
                               className="header-template-preview"
                               aria-label={`${change.name} ${field.label} 之后`}
                             >
-                              {JSON.stringify(field.after, null, 2)}
+                              {typeof field.after === 'string'
+                                ? field.after
+                                : JSON.stringify(field.after, null, 2)}
                             </pre>
                           )}
                         </dd>
