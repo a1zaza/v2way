@@ -75,13 +75,14 @@ type pool struct {
 }
 type site struct {
 	config.Site
-	headerTemplates map[string]routeHeaderTemplates
-	bodyTemplates   map[string]headertemplate.Template
-	routes          []config.Route
-	cert            *tls.Certificate
-	mu              sync.Mutex
-	tokens          float64
-	last            time.Time
+	headerTemplates   map[string]routeHeaderTemplates
+	bodyTemplates     map[string]headertemplate.Template
+	locationTemplates map[string]headertemplate.Template
+	routes            []config.Route
+	cert              *tls.Certificate
+	mu                sync.Mutex
+	tokens            float64
+	last              time.Time
 }
 type Snapshot struct {
 	Version        int64
@@ -164,12 +165,20 @@ func (e *Engine) Compile(c config.Config) (*Snapshot, error) {
 		item := &site{Site: v, routes: append([]config.Route{}, v.Routes...), tokens: float64(v.RatePerSecond), last: time.Now()}
 		item.headerTemplates = map[string]routeHeaderTemplates{}
 		item.bodyTemplates = map[string]headertemplate.Template{}
+		item.locationTemplates = map[string]headertemplate.Template{}
 		item.Domains = append([]string{}, v.Domains...)
 		for i, d := range item.Domains {
 			item.Domains[i], _ = config.Domain(d)
 		}
 		config.SortRoutes(item.routes)
 		for _, r := range item.routes {
+			if r.LocationVariables {
+				template, err := config.CompileRedirectLocation(r.Location)
+				if err != nil {
+					return fail(err)
+				}
+				item.locationTemplates[r.ID] = template
+			}
 			if r.BodyVariables {
 				template, err := headertemplate.CompileBody(r.Body)
 				if err != nil {
@@ -537,7 +546,17 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, body)
 		}
 	case "redirect":
-		http.Redirect(w, r, route.Location, route.Status)
+		location := route.Location
+		if route.LocationVariables {
+			var err error
+			location, err = s.locationTemplates[route.ID].Expand(headerContext(r, entry.ID, s.ID, route.ID))
+			if err != nil || !config.ValidRedirectLocation(location) {
+				w.Header().Del("Location")
+				http.Error(w, "请求信息无法用于跳转目标", http.StatusBadRequest)
+				return
+			}
+		}
+		http.Redirect(w, r, location, route.Status)
 	case "static":
 		e.serveStatic(w, r, *route)
 	case "proxy":

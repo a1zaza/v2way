@@ -24,7 +24,7 @@ v2way 将 Go 网关与 React/TypeScript 控制台打包为单个程序，使用�
 
 | 能力 | 说明 |
 | --- | --- |
-| 代理与路由 | 域名、路径与 HTTP 方法路由，加权后端池、健康检查、Header 变量、固定文本与变量响应 |
+| 代理与路由 | 域名、路径与 HTTP 方法路由，加权后端池、健康检查、Header 变量、固定文本与变量响应、动态重定向 |
 | 长连接 | WebSocket 与 SSE，分阶段超时，发布时保留已有连接 |
 | 静态托管 | SPA 回退、缓存控制、条件请求、Range 与目录隔离 |
 | HTTPS | 证书上传、ACME HTTP-01/DNS-01、自动续期与热更新 |
@@ -122,7 +122,7 @@ docker compose up -d
 | --- | --- |
 | 部署与发布 | [Docker、GitHub Actions 与 GHCR](docs/docker-cicd-design.md) |
 | 站点与证书 | [监听、维护与 TLS](docs/site-listeners.md) · [ACME 证书](docs/acme-certificates.md) |
-| 访问与代理 | [IP 授权与访问码](docs/access-control.md) · [Header 变量](docs/proxy-header-variables.md) · [固定响应](docs/fixed-responses.md) |
+| 访问与代理 | [IP 授权与访问码](docs/access-control.md) · [Header 变量](docs/proxy-header-variables.md) · [固定响应](docs/fixed-responses.md) · [重定向变量](docs/redirect-variables.md) |
 | 后端与连接 | [路由超时](docs/route-timeouts.md) · [TLS 校验](docs/upstream-tls.md) · [流量统计](docs/upstream-traffic-stats.md) |
 | 数据维护 | [JSON 存储与恢复](docs/json-storage.md) · [更新日志](docs/changelogs/) |
 | 项目进展 | [路线图](ROADMAP.md) · [实施状态](docs/implementation-status.md) |

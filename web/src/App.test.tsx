@@ -1144,3 +1144,73 @@ it('固定响应支持正文变量、错误保留、复制与发布预览，切�
   await user.click(screen.getByRole('button', { name: '保存草稿' }));
   await waitFor(() => expect(mock.draft().config.sites[0].routes[0].bodyVariables).toBeUndefined());
 });
+
+it('重定向变量默认关闭，支持复制、错误保留、保存和预览，切换动作清除开关', async () => {
+  const route = {
+    ...newRoute(),
+    id: 'redirect',
+    name: '跳转规则',
+    action: 'redirect' as const,
+    status: 302,
+    location: '/literal/${unknown}',
+  };
+  const site = {
+    ...newSite(),
+    id: 'site',
+    name: '跳转站点',
+    domains: ['app.example.com'],
+    routes: [route],
+  };
+  const initialConfig = { sites: [site], upstreams: [] };
+  const mock = backend({
+    initialConfig,
+    initialVersions: [
+      {
+        id: 1,
+        config: initialConfig,
+        createdAt: '2026-11-19T00:00:00Z',
+        note: '',
+        requestId: 'initial',
+      },
+    ],
+  });
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole('heading', { name: '网关运行概览' });
+  await user.click(
+    within(screen.getByRole('navigation')).getByRole('button', { name: /路由规则/ }),
+  );
+  await user.click(screen.getByRole('button', { name: '编辑规则' }));
+  const toggle = screen.getByRole('switch', { name: /^启用跳转变量/ });
+  expect((toggle as HTMLInputElement).checked).toBe(false);
+  await user.click(toggle);
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '保留编辑' }));
+  expect(screen.getByRole('alert').textContent).toContain('跳转目标');
+  expect((screen.getByLabelText('跳转目标') as HTMLInputElement).value).toContain('${unknown}');
+  await user.click(screen.getByText('可用变量与复制'));
+  const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+  await user.click(screen.getByRole('button', { name: '复制变量 request_uri' }));
+  expect(copy).toHaveBeenCalledWith('${request_uri}');
+  fireEvent.change(screen.getByLabelText('跳转目标'), {
+    target: { value: 'https://new.example.com${request_uri}' },
+  });
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '保留编辑' }));
+  await user.click(screen.getByRole('button', { name: '保存草稿' }));
+  await waitFor(() => expect(mock.draft().config.sites[0].routes[0].locationVariables).toBe(true));
+  await user.click(screen.getByRole('button', { name: '预览并发布' }));
+  const preview = await screen.findByRole('region', { name: '路由响应与 Header 变更' });
+  expect(within(preview).getByText('跳转变量')).toBeTruthy();
+  expect(within(preview).getByLabelText('跳转站点 / 跳转规则 跳转目标 之后').textContent).toBe(
+    'https://new.example.com${request_uri}',
+  );
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '关闭弹窗' }));
+  await user.click(screen.getByRole('button', { name: '编辑规则' }));
+  await user.click(screen.getByLabelText('动作类型'));
+  await user.click(screen.getByRole('option', { name: '固定响应' }));
+  expect(screen.queryByRole('switch', { name: /^启用跳转变量/ })).toBeNull();
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '保留编辑' }));
+  await user.click(screen.getByRole('button', { name: '保存草稿' }));
+  await waitFor(() =>
+    expect(mock.draft().config.sites[0].routes[0].locationVariables).toBeUndefined(),
+  );
+});

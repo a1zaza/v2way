@@ -61,6 +61,7 @@ type Route struct {
 	Status                       int               `json:"status"`
 	Body                         string            `json:"body,omitempty"`
 	BodyVariables                bool              `json:"bodyVariables,omitempty"`
+	LocationVariables            bool              `json:"locationVariables,omitempty"`
 	Location                     string            `json:"location,omitempty"`
 	TimeoutSeconds               int               `json:"timeoutSeconds"`
 	ConnectTimeoutSeconds        int               `json:"connectTimeoutSeconds,omitempty"`
@@ -359,12 +360,21 @@ func Validate(c Config) []Issue {
 				if r.Status != 301 && r.Status != 302 && r.Status != 307 && r.Status != 308 {
 					add(rf+".status", "跳转状态必须为 301、302、307 或 308")
 				}
-				v, e := url.Parse(r.Location)
-				if e != nil || v == nil || r.Location == "" || strings.HasPrefix(r.Location, "//") || strings.ContainsAny(r.Location, "\r\n") || !(strings.HasPrefix(r.Location, "/") || (v.Scheme == "http" || v.Scheme == "https") && v.Host != "" && v.User == nil) {
-					add(rf+".location", "跳转目标必须为站内绝对路径或 HTTP/HTTPS 地址")
+				if r.LocationVariables {
+					if _, err := CompileRedirectLocation(r.Location); err != nil {
+						add(rf+".location", err.Error())
+					}
+				} else {
+					v, e := url.Parse(r.Location)
+					if e != nil || v == nil || r.Location == "" || strings.HasPrefix(r.Location, "//") || strings.ContainsAny(r.Location, "\r\n") || !(strings.HasPrefix(r.Location, "/") || (v.Scheme == "http" || v.Scheme == "https") && v.Host != "" && v.User == nil) {
+						add(rf+".location", "跳转目标必须为站内绝对路径或 HTTP/HTTPS 地址")
+					}
 				}
 			default:
 				add(rf+".action", "不支持的路由动作")
+			}
+			if r.LocationVariables && r.Action != "redirect" {
+				add(rf+".locationVariables", "跳转变量仅支持重定向路由")
 			}
 			if r.HeaderVariables && r.Action != "proxy" {
 				add(rf+".headerVariables", "Header 变量仅支持反向代理路由")

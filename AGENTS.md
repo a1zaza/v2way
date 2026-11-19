@@ -146,8 +146,9 @@
 - 路由超时默认：总处理 60 秒、连接 5 秒（含 DNS 和全部 IP 尝试）、TLS 握手 5 秒、响应头 30 秒；整数 0–86400，0 继承默认。同池不同阶段超时隔离 Transport。
 - 响应前超时返回 504，正文开始后中断连接；流式/WebSocket 免总预算，阶段预算仍生效，尚无流式空闲超时。详见 [路由超时](docs/route-timeouts.md)。
 - 后端池 `skipTlsVerify` 默认关闭，开启后覆盖普通代理、流式/WebSocket、独立超时连接池及健康探测；草稿发布后生效，不改变站点对外证书与未知 SNI 拒绝策略。详见 [后端 TLS](docs/upstream-tls.md)。
-- 代理路由 `headerVariables` 默认关闭，开启后请求/响应头值支持 `${remote_addr}` 等 10 个变量，按配置快照编译、按原始请求展开；`$$` 为字面量美元符号，旧配置和关闭模式原文透传。来源只取实际连接，不信任转发头；保留字段、管理 Cookie 及 IP 授权缓存策略保持生效。使用见 [Header 变量](docs/proxy-header-variables.md)。
-- 固定响应路由沿用 `action: response`，`bodyVariables` 默认关闭，开启后正文支持与 Header 相同的 10 个变量和 `$$` 转义；模板按快照编译、按请求展开，支持多行且模板/结果各最多 64 KiB，纯文本输出。HEAD/304 无正文，204 禁止非空正文。使用见 [固定响应](docs/fixed-responses.md)。
+- 代理路由 `headerVariables` 默认关闭，开启后请求/响应头值支持 `${remote_addr}` 等 13 个变量，按配置快照编译、按原始请求展开；`$$` 为字面量美元符号，旧配置和关闭模式原文透传。来源只取实际连接，不信任转发头；保留字段、管理 Cookie 及 IP 授权缓存策略保持生效。使用见 [Header 变量](docs/proxy-header-variables.md)。
+- 重定向路由 `locationVariables` 默认关闭，开启后 `location` 支持共享的 13 个请求变量；新增 `request_uri`（路径含查询）、`args`（不含问号）、`is_args`（问号或空，保留显式空查询）也适用于 Header/正文。模板按快照编译，展开后再校验目标，只允许站内绝对路径或 HTTP/HTTPS，不允许用户信息、协议相对目标、反斜杠和控制字符；模板/结果各最多 8192 字节，非法结果返回 400 且不发送 Location。详见 [重定向变量](docs/redirect-variables.md)。
+- 固定响应路由沿用 `action: response`，`bodyVariables` 默认关闭，开启后正文支持与 Header 相同的 13 个变量和 `$$` 转义；模板按快照编译、按请求展开，支持多行且模板/结果各最多 64 KiB，纯文本输出。HEAD/304 无正文，204 禁止非空正文。使用见 [固定响应](docs/fixed-responses.md)。
 - 后端池统计本次运行请求数及上下行正文/隧道字节，每 5 秒刷新，排除健康探测。同 ID 连续发布保留，删除重建或进程重启清零，不持久化；未发布/不可用显示破折号，运行零值显示 0。详见 [流量统计](docs/upstream-traffic-stats.md)。
 - 访问日志 `bytes` 为单次请求下行体积：HTTP 正文或升级后的隧道字节（含 WebSocket 帧、排除握手头），不包含上行。升级连接结束后记录最终日志，关闭时等待进行中的写入完成计数；实时上下行看后端卡片。
 

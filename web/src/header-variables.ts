@@ -6,6 +6,9 @@ export const headerVariables = [
   ['http_host', '原始 Host，保留端口'],
   ['request_method', '原始请求方法'],
   ['uri', '原始转义路径，不带查询参数'],
+  ['request_uri', '原始转义路径及查询串，保留参数顺序和编码'],
+  ['args', '原始查询串，不含问号；没有参数时为空'],
+  ['is_args', '请求包含查询部分时为问号，否则为空'],
   ['request_id', '本次请求标识，与访问日志一致'],
   ['site_id', '所属站点 ID'],
   ['route_id', '匹配路由 ID'],
@@ -41,4 +44,42 @@ function validateTemplate(value: string, label: string, limit: number, multiline
       i = end + 1;
     } else i++;
   }
+}
+
+export function validateLocationVariables(value: string) {
+  validateTemplate(value, '跳转目标', 8192, false);
+  const sample: Record<string, string> = Object.fromEntries(
+    headerVariables.map(([name]) => [name, 'value']),
+  );
+  Object.assign(sample, {
+    remote_addr: '192.0.2.1',
+    remote_port: '1234',
+    scheme: 'https',
+    host: 'example.com',
+    http_host: 'example.com:443',
+    uri: '/path',
+    request_uri: '/path?a=1',
+    args: 'a=1',
+    is_args: '?',
+  });
+  const expanded = value.replace(/\$\$|\$\{([a-z_]+)\}/g, (_match, name: string | undefined) =>
+    name ? sample[name] : '$',
+  );
+  let valid = !/[\x00-\x1f\x7f\\]/.test(expanded) && !expanded.startsWith('//');
+  if (expanded.startsWith('/')) {
+    valid &&= !expanded.startsWith('/\\');
+  } else {
+    try {
+      const url = new URL(expanded);
+      valid &&=
+        /^https?:\/\/[^/?#]+(?:[/?#]|$)/.test(expanded) &&
+        ['http:', 'https:'].includes(url.protocol) &&
+        !!url.hostname &&
+        !url.username &&
+        !url.password;
+    } catch {
+      valid = false;
+    }
+  }
+  if (!valid) throw new Error('跳转目标必须展开为站内绝对路径或不含用户信息的 HTTP/HTTPS 地址');
 }

@@ -38,6 +38,9 @@ ${remote_addr}
 | `${http_host}` | 原始 Host，保留端口 |
 | `${request_method}` | 请求方法 |
 | `${uri}` | 原始转义路径，不包含查询参数 |
+| `${request_uri}` | 原始转义路径及查询部分 |
+| `${args}` | 原始查询串，不含问号，无参数时为空 |
+| `${is_args}` | 请求带查询部分时为问号，否则为空 |
 | `${request_id}` | 与本次访问日志一致的请求标识 |
 | `${site_id}` | 匹配站点 ID |
 | `${route_id}` | 匹配路由 ID |

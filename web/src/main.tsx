@@ -51,6 +51,7 @@ import {
   headerVariables,
   validateHeaderVariables,
   validateBodyVariables,
+  validateLocationVariables,
 } from './header-variables.ts';
 import { ConfigImport } from './config-import.tsx';
 import { AccessControlPanel } from './access-control-panel.tsx';
@@ -1831,6 +1832,8 @@ function EditorModal({
           validateHeaderVariables(req as Record<string, string>, '请求头');
           validateHeaderVariables(resp as Record<string, string>, '响应头');
         }
+        if (route.action === 'redirect' && route.locationVariables)
+          validateLocationVariables(route.location ?? '');
         if (route.action === 'response' && route.bodyVariables)
           validateBodyVariables(route.body ?? '');
         onSave({
@@ -1844,6 +1847,8 @@ function EditorModal({
               route.action === 'response' ? route.bodyVariables || undefined : undefined,
             root: route.action === 'static' ? route.root : undefined,
             location: route.action === 'redirect' ? route.location : undefined,
+            locationVariables:
+              route.action === 'redirect' ? route.locationVariables || undefined : undefined,
             methods:
               route.action === 'access_login'
                 ? ['GET', 'POST']
@@ -2231,6 +2236,7 @@ function EditorModal({
                       action: value as Route['action'],
                       headerVariables: value === 'proxy' ? route.headerVariables : undefined,
                       bodyVariables: value === 'response' ? route.bodyVariables : undefined,
+                      locationVariables: value === 'redirect' ? route.locationVariables : undefined,
                       status: value === 'redirect' ? 302 : 200,
                       ...(value === 'access_login'
                         ? {
@@ -2352,7 +2358,22 @@ function EditorModal({
               {route.action === 'response' && route.bodyVariables && <VariableReference />}
               {route.action === 'redirect' && (
                 <>
-                  <Field label="跳转目标">
+                  <Toggle
+                    label="启用跳转变量"
+                    checked={!!route.locationVariables}
+                    description="开启后展开请求路径、查询串等变量；关闭时使用固定跳转地址。"
+                    onChange={(enabled) =>
+                      setRoute({ ...route, locationVariables: enabled || undefined })
+                    }
+                  />
+                  <Field
+                    label="跳转目标"
+                    hint={
+                      route.locationVariables
+                        ? '例如 https://new.example.com${request_uri} 保留路径和参数；${uri} 仅保留路径。$$ 表示字面量 $。'
+                        : '填写站内绝对路径或 HTTP/HTTPS 地址。'
+                    }
+                  >
                     <input
                       required
                       placeholder="https://example.com 或 /new-path"
@@ -2360,6 +2381,7 @@ function EditorModal({
                       onChange={(e) => setRoute({ ...route, location: e.target.value })}
                     />
                   </Field>
+                  {route.locationVariables && <VariableReference />}
                   <Field label="跳转状态码">
                     <Select
                       value={route.status}
@@ -2536,6 +2558,8 @@ function PublishModal({
         const old = before.find((r) => r.id === route.id);
         const next = after.find((r) => r.id === route.id);
         const fields = [
+          { label: '跳转变量', before: !!old?.locationVariables, after: !!next?.locationVariables },
+          { label: '跳转目标', before: old?.location ?? '', after: next?.location ?? '' },
           { label: '正文变量', before: !!old?.bodyVariables, after: !!next?.bodyVariables },
           { label: '响应正文', before: old?.body ?? '', after: next?.body ?? '' },
           { label: 'Header 变量', before: !!old?.headerVariables, after: !!next?.headerVariables },

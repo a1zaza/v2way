@@ -23,9 +23,14 @@ func headerContext(r *http.Request, requestID, siteID, routeID string) headertem
 	if r.TLS != nil {
 		scheme = "https"
 	}
+	isArgs := ""
+	if r.URL.RawQuery != "" || r.URL.ForceQuery {
+		isArgs = "?"
+	}
 	return headertemplate.Context{
 		"remote_addr": ip, "remote_port": port, "scheme": scheme,
 		"host": host(r.Host), "http_host": r.Host, "request_method": r.Method,
 		"uri": r.URL.EscapedPath(), "request_id": requestID, "site_id": siteID, "route_id": routeID,
+		"request_uri": r.URL.RequestURI(), "args": r.URL.RawQuery, "is_args": isArgs,
 	}
 }

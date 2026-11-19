@@ -14,6 +14,7 @@ export type Route = {
   body?: string;
   bodyVariables?: boolean;
   location?: string;
+  locationVariables?: boolean;
   timeoutSeconds: number;
   connectTimeoutSeconds?: number;
   tlsHandshakeTimeoutSeconds?: number;

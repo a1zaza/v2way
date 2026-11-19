@@ -1,4 +1,4 @@
-// Package headertemplate compiles opt-in request variable templates for headers and response bodies.
+// Package headertemplate compiles opt-in request variable templates for headers, response bodies and redirects.
 package headertemplate
 
 import (
@@ -12,7 +12,7 @@ import (
 const MaxBytes = 8192
 const MaxBodyBytes = 64 << 10
 
-var names = [...]string{"remote_addr", "remote_port", "scheme", "host", "http_host", "request_method", "uri", "request_id", "site_id", "route_id"}
+var names = [...]string{"remote_addr", "remote_port", "scheme", "host", "http_host", "request_method", "uri", "request_uri", "args", "is_args", "request_id", "site_id", "route_id"}
 
 func Names() []string { return append([]string(nil), names[:]...) }
 
@@ -20,6 +20,7 @@ type part struct{ text, variable string }
 type Template struct {
 	parts []part
 	body  bool
+	label string
 }
 type Headers map[string]Template
 type Context map[string]string
@@ -40,7 +41,7 @@ func Compile(value string) (Template, error) {
 	if !validValue(value) {
 		return Template{}, errors.New("Header 值含非法字符或超过 8192 字节")
 	}
-	return compile(value, false)
+	return compile(value, false, "Header")
 }
 
 // CompileBody allows multiline text while retaining the fixed variable registry.
@@ -48,15 +49,18 @@ func CompileBody(value string) (Template, error) {
 	if len(value) > MaxBodyBytes {
 		return Template{}, errors.New("响应正文模板超过 65536 字节")
 	}
-	return compile(value, true)
+	return compile(value, true, "响应正文")
 }
 
-func compile(value string, body bool) (Template, error) {
-	t := Template{body: body}
-	label := "Header"
-	if body {
-		label = "响应正文"
+func CompileLocation(value string) (Template, error) {
+	if !validValue(value) {
+		return Template{}, errors.New("跳转目标含非法字符或超过 8192 字节")
 	}
+	return compile(value, false, "跳转目标")
+}
+
+func compile(value string, body bool, label string) (Template, error) {
+	t := Template{body: body, label: label}
 	var literal strings.Builder
 	flush := func() {
 		if literal.Len() > 0 {
@@ -95,16 +99,20 @@ func compile(value string, body bool) (Template, error) {
 }
 
 func (t Template) Expand(context Context) (string, error) {
-	label, limit := "Header", MaxBytes
+	label, limit := t.label, MaxBytes
+	if label == "" {
+		label = "Header"
+	}
 	if t.body {
-		label, limit = "响应正文", MaxBodyBytes
+		limit = MaxBodyBytes
 	}
 	var result strings.Builder
 	for _, p := range t.parts {
 		value := p.text
 		if p.variable != "" {
-			value = context[p.variable]
-			if value == "" {
+			var exists bool
+			value, exists = context[p.variable]
+			if !exists || value == "" && p.variable != "args" && p.variable != "is_args" {
 				return "", fmt.Errorf("%s 变量 %s 不可用", label, p.variable)
 			}
 		}

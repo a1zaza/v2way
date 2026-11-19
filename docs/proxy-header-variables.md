@@ -43,6 +43,9 @@ JSON 配置中，对应路由需设置 `headerVariables: true`，模板仍存放
 | `${http_host}`      | 原始 Host，保留端口及 IPv6 方括号                         |
 | `${request_method}` | 原始请求方法，如 `GET`                                    |
 | `${uri}`            | 原始转义路径，不含查询参数，不受“去除匹配前缀”影响        |
+| `${request_uri}` | 原始转义路径及查询部分，保留编码与参数顺序 |
+| `${args}` | 原始查询串，不含问号，无参数时为空 |
+| `${is_args}` | 请求带查询部分时为问号，否则为空；保留显式空查询 |
 | `${request_id}`     | 网关生成的本次请求 ID，与访问日志关联                     |
 | `${site_id}`        | 已匹配站点的 ID                                           |
 | `${route_id}`       | 已匹配路由的 ID                                           |
@@ -68,3 +71,5 @@ JSON 配置中，对应路由需设置 `headerVariables: true`，模板仍存放
 管理 Cookie 转发开关和受 IP 授权保护站点的 `private, no-store` 缓存策略始终生效。Header 空字符串仍表示设置空值，不是删除指令。
 
 SSE 不会为变量展开而缓冲正文。WebSocket 只在握手时设置 Header，升级消息不再次展开；发布后存量连接继续使用原快照，新请求采用新模板。
+
+路径与查询变量也可用于 [重定向目标](redirect-variables.md) 和 [固定响应正文](fixed-responses.md)。

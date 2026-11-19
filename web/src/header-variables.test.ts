@@ -3,6 +3,7 @@ import {
   headerVariables,
   validateHeaderVariables,
   validateBodyVariables,
+  validateLocationVariables,
 } from './header-variables.ts';
 
 describe('Header 模板校验', () => {
@@ -47,4 +48,27 @@ it('正文模板复用全部变量并允许换行，保留独立的 64 KiB 限�
   expect(() => validateBodyVariables('中'.repeat(21846))).toThrow(/65536/);
   for (const value of ['${unknown}', '${}', '${remote_addr'])
     expect(() => validateBodyVariables(value)).toThrow(/响应正文/);
+});
+
+it('跳转模板支持路径、查询和转义，并拒绝非法目标', () => {
+  for (const value of [
+    'https://new.example.com${request_uri}',
+    '/new${uri}${is_args}${args}',
+    '${scheme}://${http_host}${uri}',
+    '${uri}',
+    '/literal/$${unknown}',
+  ])
+    expect(() => validateLocationVariables(value)).not.toThrow();
+  for (const value of [
+    '',
+    '${unknown}',
+    '${uri',
+    '//evil.example/${uri}',
+    '/\\evil.example/${uri}',
+    'javascript:${uri}',
+    'https://user:pass@example.com${uri}',
+    'https:///empty${uri}',
+    '/bad\r\nInjected:1',
+  ])
+    expect(() => validateLocationVariables(value)).toThrow();
 });
