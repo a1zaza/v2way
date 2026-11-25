@@ -14,6 +14,7 @@
 # 项目概述
 
 - 项目名与品牌统一为小写 `v2way`，适用于页面、提示、日志、文档及协议标识。
+- 项目采用 MIT License，完整文本位于根目录 `LICENSE`，版权声明为 `Copyright (c) 2026 a1zaza`；README 提供许可证徽章与入口，第三方依赖及字体保留各自许可。
 - v2way 是独立开发、部署与验收的可视化统一网关，目标承接 Nginx 的 HTTP/HTTPS 代理、静态托管、WebSocket/SSE、证书和访问治理能力。
 - 当前为单实例管理，不提供工作空间切换、租户隔离或多租户功能；页面不使用“默认工作空间”占位。
 - 后端为 Go 网关与管理 API，入口 `cmd/v2way`；前端为 `web/` 下的 React/TypeScript 中文控制台。运行配置与私有数据使用 JSON，审计使用月度 JSONL，不使用 SQLite 运行时驱动。

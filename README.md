@@ -11,6 +11,7 @@
 [![镜像发布](https://github.com/a1zaza/v2way/actions/workflows/publish-image.yml/badge.svg)](https://github.com/a1zaza/v2way/actions/workflows/publish-image.yml)
 [![镜像](https://img.shields.io/badge/GHCR-v2way-blue?logo=github)](https://github.com/a1zaza/v2way/pkgs/container/v2way)
 [![架构](https://img.shields.io/badge/平台-amd64%20%7C%20arm64-2496ED?logo=docker)](.github/workflows/publish-image.yml)
+[![许可证](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 [快速开始](#快速开始) · [使用文档](#使用文档) · [路线图](ROADMAP.md) · [问题反馈](https://github.com/a1zaza/v2way/issues)
 
@@ -134,3 +135,7 @@ docker compose up -d
 欢迎通过 [Issues](https://github.com/a1zaza/v2way/issues) 提交问题或功能建议，通过 Pull Request 参与改进。反馈问题时请附上版本或镜像 digest、部署环境、复现步骤及脱敏日志；不提交真实密码、访问码、令牌或私钥。
 
 镜像发布由 [GitHub Actions](.github/workflows/publish-image.yml) 完成：amd64、arm64 原生构建通过后，合并到同一个 `latest` 标签。
+
+## 许可证
+
+项目采用 [MIT License](LICENSE)，版权归属 `Copyright (c) 2026 a1zaza`。第三方依赖及字体遵循各自的许可证。
